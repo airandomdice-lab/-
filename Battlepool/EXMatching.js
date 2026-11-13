@@ -1,10 +1,10 @@
-// 対戦相手のプール「標準対戦全体」（AIRandomDicesim 3.13.1 で書き出し）
+// 対戦相手のプール「EXMatching」（AIRandomDicesim 3.13.1 で書き出し）
 // Battlepool フォルダに置き、Battlepool/index.js の RD_POOL_FILES に並べると、開いたときに読み込まれます
 RD.definePool("my_pool", {
   "format": "rd-battle-pool",
   "formatVersion": 1,
   "id": "my_pool",
-  "name": "標準対戦全体",
+  "name": "EXMatching",
   "desc": "",
   "entries": [
     {
@@ -5619,6 +5619,59 @@ RD.definePool("my_pool", {
       "traits": {},
       "cd": 3000,
       "field": "prism",
+      "fieldLv": 20
+    },
+    {
+      "name": "台風テレポフロー",
+      "weight": 2,
+      "ai": "typhoon_teleport_flow",
+      "aiOptions": {
+        "speed": 0.3,
+        "assassinSpeed": 0.1,
+        "sendLeft": 3,
+        "knightTyphoon": 5,
+        "w3Typhoon": 8,
+        "w3FlowMaxPips": 2,
+        "otherMaxPips": 2,
+        "typhoonMerge": "excess",
+        "asnLeft": 45,
+        "asnPips": 6,
+        "asnTyphoons": 2,
+        "fullFallback": true,
+        "finalSummon": true,
+        "puWait": false
+      },
+      "control": {
+        "interval": 1,
+        "maxOps": 1,
+        "summonInterval": 1,
+        "actInterval": 1,
+        "dragTime": 1
+      },
+      "deck": [
+        "typhoon",
+        "teleport",
+        "flow",
+        "growth",
+        "joker"
+      ],
+      "cls": {
+        "typhoon": 14,
+        "teleport": 15,
+        "flow": 13,
+        "growth": 13,
+        "joker": 13
+      },
+      "startLv": {
+        "typhoon": 1,
+        "teleport": 1,
+        "flow": 1,
+        "growth": 1,
+        "joker": 1
+      },
+      "traits": {},
+      "cd": 3000,
+      "field": "journal",
       "fieldLv": 20
     }
   ]
