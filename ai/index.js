@@ -25,6 +25,9 @@ RD_AI_FILES = [
 'sword_atom_ai.js',
 'moonsun_disrupt_royal_ai.js',
 'typhoon_teleport_flow_ai1.0.0.js',
+'moon_combo_paradise_ai1.0.0.js',
+'moon_combo_paradise_toa_ai1.4.0.js',
+'scopecombo_paradise_toa_ai1.8.1.js',
 
 
 ];
