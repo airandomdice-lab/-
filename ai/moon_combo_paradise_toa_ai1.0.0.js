@@ -1,35 +1,5 @@
-// 楽園月コンToAAI 1.4.0（AI API v1／AI_AGENT_GUIDE 1.10.0・AIRandomDicesim 3.13.1 で確認）
+// 楽園月コンToAAI 1.0.0（AI API v1／AI_AGENT_GUIDE 1.10.0・AIRandomDicesim 3.13.1 で確認）
 //   楽園月コンAI 1.0.0 をもとに、ToAさんの大会動画（切り抜き。ユーザーの口頭説明）の動かし方を入れた版
-//   1.4.0：マジシャン前の中出目ジョーカー（ユーザー指定。magJoker）
-//          条件：コンボを隣に置ける出目 mjMoonMin(6) 以上の月が1個だけで、それが星の月。星のコンボが隣接していない。
-//                隣に、星・月・盤面の端でふさがれていないマスが2つ以上。
-//                出目p（mjJokerMin(4) 以上）のコンボ1個を星の月の隣に置いた火力で、予告からメテオ落下まで（mjKillT 秒）にマジシャンを倒せる
-//          手順：A) 星の月の隣の1マス（コンボ以外があればそれ、なければ出目の最も低いコンボ）へ外から合成を重ねる。
-//                   出目5以上になったら外へ逃がす。出目p以上のジョーカーが隣にできるまで繰り返す
-//                B) そのジョーカーと同じ出目のコンボが外にできるまで、外で合成する
-//                C) 星の月の隣のコンボと同じ出目のコンボ・適応・ジョーカーが外にできるまで、外で合成する
-//                D) ボス出現の演出中に、星の月の隣のコンボを外へ逃がす（月は活性のまま）
-//                E) メテオが星の月・主の月に落ちそうなら、ジョーカーでコンボをコピーして倒す。
-//                   ほかのマスならマジシャン合わせ。メテオが落ちた後・ボスが magKillProg まで来たらコピーして倒す
-//          この手順が使えるとき（ジョーカーと外のコンボがそろったとき）は、マジシャン前に活性を切らない
-//   1.3.0：（ユーザー指定）
-//          ・保持・押し返し・放置は火力で決める：送り込みが最大（毎秒 maxInflowPerDt÷湧き間隔 体）の雑魚を、1つ目の角までに
-//            処理できる火力（enough）があるときだけ止まる。足りなければ、ウェーブ後半でも先頭が進んでいてもコンボを積む
-//          ・マジシャン合わせ：予告が出たらメテオが落ちるまで最大限合成する。順番は 予告マスへ合成（ジョーカーはコピーしてから）→
-//            予告マスのダイスと同じ出目を作る合成 → 召喚 → そのほかの合成で盤面を回す（相方・ジョーカー・適応が生まれるまで）
-//          ・成長を潰す：処理が追いついている（enough）ときは、出目2以上の成長を潰す手を点数に関係なく先に打つ（出目の高い成長から）。
-//            出目 rotGrowPips(4) 以上の成長を潰せないときは、保持・放置の間も盤面を回して（合成→召喚）、
-//            同じ出目のジョーカー・適応・成長の相方を狙う
-//   1.2.0：序盤のジョーカーと成長（ユーザー指定）
-//          ・1ウェーブのジョーカーは必ずコンボをコピーする（同じ出目のコンボがあればすぐ。ほかの種類のコピー・ジョーカーを使う合成はしない）
-//          ・出目2以上のジョーカーは、同じ出目のコンボがなく同じ出目の成長があれば、成長をコピーする（火力が安定するまで。1ウェーブも）
-//          ・火力が安定する（＝強い盤面 strong になる）までは、成長同士の合成をしない
-//            （盤面が埋まっていて、ほかに打てる手が1つもないときだけ打つ）
-//   1.1.0：序盤の動き（ユーザー指定）
-//          ・序盤もジョーカーで月をコピーしない（moonCopyFreeToWave 2→0。コピーは最後の手段だけ）
-//          ・出目 careMoonPips(3) 以上の月に出目 careComboPips(2) 以上のコンボが隣接するまでは、月の活性を気にしない
-//            （火力は活性なしで数え、活性に戻す手・活性の保険・活性を守るための召喚の見送りを使わない）
-//          ・1ウェーブは、出目 w1MoonPairMax(2) 以下の月のペアが出たらすぐ合成する（召喚より先。合成先は楽園マス以外・左を優先）
 // 想定デッキ：月・コンボ・適応・成長・ジョーカー、フィールド：神々の楽園（Lv20）、本家 6.0.5、対戦用
 // 登録ID：moon_combo_paradise_toa（楽園月コンAI〔moon_combo_paradise〕と同時に読み込める）
 //
@@ -87,10 +57,6 @@
 //   相手もリミット解除の速さ（判断0.1・召喚0.2・操作0.2・ドラッグ0.2）60試合：35勝（1.0.0 は 42勝）
 //   練習30試合：平均45.6W 中央51W 上位10% 75W 最高83W（1.0.0 は平均48.9W）
 //   動画の条件（月11・コンボ10・成長10・ジョーカー10・適応15・CD1700%）の練習30試合：平均9.8W（1.0.0 は16.6W）
-//   1.2.0（序盤のジョーカーと成長）：対戦60試合×2組 38勝・45勝、練習30試合 平均30.7W 中央27W
-//   1.3.0（火力で保持を決める・マジシャン合わせ・成長を潰す）：対戦60試合×2組 37勝・43勝、練習30試合 平均36.4W 中央44W
-//   1.4.0（マジシャン前の中出目ジョーカー）：対戦60試合×2組 31勝・40勝（magJoker を切ると 37勝・43勝）。
-//     手順A〜Dは試験で動きを確認。E（コピーして倒す）は条件がそろう場面がなく未確認
 //   放置は試験では勝ちを減らした（SPの条件なしで 29〜35勝／放置なしで 39〜42勝）ので、SPが idleMinSp 以上余っているときだけにしている
 RD.defineAgent('moon_combo_paradise_toa', {
   name: '楽園月コンToAAI',
@@ -110,19 +76,13 @@ RD.defineAgent('moon_combo_paradise_toa', {
     zonePen: 1.0,
     sixRule: true,
     kGrowHaz: 0.6, growHazPips: 2,
-    moonCopyFreeToWave: 0,
-    careMoonPips: 3, careComboPips: 2,     // この出目以上の月に、この出目以上のコンボが隣接するまでは活性を気にしない
-    w1JokerCombo: true, jokerGrowthMinPips: 2, noGrowthPairUntilStrong: true, // 1.2.0：序盤のジョーカーと成長
-    maxInflowPerDt: 5.6, zakoSpeed: 0.6,   // 1.3.0：送り込み最大＝毎秒 maxInflowPerDt÷湧き間隔 体（湧き間隔2秒で2.8体）／雑魚の速さ（敵がいないときの値）
-    rotGrowPips: 4, rotMaxLoss: 2.0, rotMatchBonus: 1.0, // 1.3.0：成長の相方を狙って盤面を回す
-    magJoker: true, mjMoonMin: 6, mjJokerMin: 4, mjKillT: 1.5, // 1.4.0：マジシャン前の中出目ジョーカー
-    w1MoonPairMax: 2,                      // 1ウェーブ：この出目以下の月のペアはすぐ合成する
+    moonCopyFreeToWave: 2,
     reserveSummons: 8, reserveFromWave: 5,
     puMode: 'toa',                         // 'toa'＝月Lv5＋条件つきでコンボLv3＋緊急／'free'＝楽園月コンAI 1.0.0 と同じ／'never'
     moonPuPips: 4, moonPuLv: 5, comboPuLv: 3, comboPuFromWave: 3, corner1: 3.5, puSpareSummons: 3,
     knightEarnLeft: 25, knightMixLeft: 10, knightStar: true,
     leonAccept: true, leonStarMoons: 3, leonOtherStars: 3, leonTau: 0.5,
-    magTake: true, magSync: true, magSyncComboMax: 8, magLead: 15, magLowPips: 2, magLowBonus: 0.6, kZoneOut: 1.0, kWMag: 4.0,
+    magTake: true, magSync: true, magSyncComboMax: 4, magLead: 15, magLowPips: 2, magLowBonus: 0.6, kZoneOut: 1.0, kWMag: 4.0,
     deactLead: 8, flowProg: 0.5, magKillProg: 0.62, deactMinRecover: 0.6,
     dirEps: 0.03,
     notFullKeysToa: ['joker>combo', 'adaptive+combo', 'adaptive+growth', 'growth+growth', 'joker>growth'],
@@ -176,7 +136,7 @@ RD.defineAgent('moon_combo_paradise_toa', {
     const pairKey = (x, y) => [x, y].sort().join('+');
     const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
     // 試合中に持つ状態
-    const ST = { mjW: null, mjState: '', mjLatch: null, hadStar: false, fast: false, wantFast: false, push: false, mix: null, noopSig: '', noopUntil: 0, mode: '' };
+    const ST = { hadStar: false, fast: false, wantFast: false, push: false, mix: null, noopSig: '', noopUntil: 0, mode: '' };
     const setMode = m => { if (ST.mode !== m) { ST.mode = m; ctx.log(`モード：${m}`); } };
 
     function core(obs) {
@@ -235,11 +195,6 @@ RD.defineAgent('moon_combo_paradise_toa', {
       const moonCnt = b => { let c = 0; for (const d of b) if (d && d.type === 'moon') c++; return c; };
       const isAct = b => AC.includes(moonCnt(b));
       const act0 = isAct(base0);
-      // 活性を気にする盤面か：出目 careMoonPips 以上の月に、出目 careComboPips 以上のコンボが隣接している
-      const cares = b => { for (let i = 0; i < 15; i++) { const d = b[i]; if (!d || d.type !== 'moon' || d.pips < o.careMoonPips) continue;
-        for (const j of nb[i]) if (b[j] && b[j].type === 'combo' && b[j].pips >= o.careComboPips) return true; } return false; };
-      const careNow = cares(base0);
-      const hasCombo = p => cur.some(d => d && d.type === 'combo' && d.pips === p);
 
       // 主の月と火力ゾーン
       const adjCombo = i => nb[i].reduce((s, j) => s + (cur[j] && cur[j].type === 'combo' ? cur[j].pips : 0), 0);
@@ -346,7 +301,6 @@ RD.defineAgent('moon_combo_paradise_toa', {
         return [fb / 1.2, fz / 1.2];
       };
       const fireEff = (b, n, K) => {
-        if (!cares(b)) return fireRaw(b, n, false, K); // 活性を気にしない間は、活性なしで数える
         if (isAct(b)) return fireRaw(b, n, true, K);
         let best = fireRaw(b, n, false, K);
         const mc = moonCnt(b);
@@ -475,53 +429,10 @@ RD.defineAgent('moon_combo_paradise_toa', {
       // 押されている：活性しているのに雑魚処理が足りず、先頭が押し返しの線を越えている
       const pressed = act0 && rz < o.pressedRatio && leadProg >= o.pushProg && !bossNow;
 
-      // ---- マジシャン前の中出目ジョーカー：使えるかどうか ----
-      const protCells = new Set(); // ふつうの手では使わないマス（用意したジョーカー・外のコンボ・逃がし先）
-      let mj = null, mjReady = false, mjWhy = '';
-      if (o.magJoker && magCase && hasStar) {
-        mjWhy = !magTake ? '強い盤面でない' : '条件に合わない（月・星のコンボ・隣のマス）';
-        const blocked = j => !!(cur[j] && (cur[j].type === 'moon' || (cur[j].pips === 7 && cur[j].type !== 'combo')));
-        const big = [];
-        for (let i = 0; i < 15; i++) if (cur[i] && cur[i].type === 'moon' && cur[i].pips >= o.mjMoonMin && !cur[i].sealed && nb[i].some(j => !blocked(j))) big.push(i);
-        if (big.length === 1 && cur[big[0]].pips === 7) {
-          const S = big[0], zoneS = new Set(nb[S]);
-          const starCombo = nb[S].some(j => cur[j] && cur[j].type === 'combo' && cur[j].pips === 7);
-          const free = nb[S].filter(j => !(cur[j] && (cur[j].pips === 7 || cur[j].type === 'moon')));
-          if (!starCombo && free.length >= 2) {
-            const hp = bossNow ? obs.boss.hp : bossPred(obs.wave, sumHp(obs.enemies));
-            const A = K0.B + K0.D * n0 * (n0 + 1) / 2, Sv = (MOON_CLS * 7 + 2 * (K0.L - 1)) / 100 * 1.03;
-            const V = 1 / Math.max(0.05, 1 - Math.min(0.95, Sv - tSlow)), c = Math.min(1, C0 + 0.35);
-            const fOf = q => q * A * 1.7 * ((1 - c) + c * CD) * V / 1.2;
-            let pMin = 0; for (let q = o.mjJokerMin; q <= 7; q++) if (fOf(q) * o.mjKillT >= hp) { pMin = q; break; }
-            mjWhy = pMin ? '' : '火力が足りない';
-            if (pMin && magTake) {
-              const out = i => !zoneS.has(i) && i !== S;
-              let J = -1; for (const i of zoneS) if (cur[i] && cur[i].type === 'joker' && cur[i].pips >= pMin && !cur[i].sealed && (J < 0 || cur[i].pips > cur[J].pips)) J = i;
-              let Cp = -1; if (J >= 0) for (let i = 0; i < 15; i++) if (out(i) && cur[i] && cur[i].type === 'combo' && cur[i].pips === cur[J].pips && !cur[i].sealed) { Cp = i; break; }
-              mj = { S, zoneS, pMin, out, J, Cp };
-              mjReady = J >= 0 && Cp >= 0;
-              if (J >= 0) protCells.add(J);
-              if (Cp >= 0) protCells.add(Cp);
-            }
-          }
-        }
-      }
-
-      // 演出・ボス戦に入った後は、合成の結果で条件が崩れても、用意したジョーカーと外のコンボが残っていれば続ける
-      const lt = ST.mjLatch;
-      if (!mjReady && lt && lt.wave === obs.wave && (obs.phase === 'intro' || magNow) && cur[lt.J] && cur[lt.J].type === 'joker' && !cur[lt.J].sealed
-        && cur[lt.Cp] && cur[lt.Cp].type === 'combo' && cur[lt.Cp].pips === cur[lt.J].pips && cur[lt.S] && cur[lt.S].type === 'moon' && cur[lt.S].pips === 7) {
-        const zoneS = new Set(nb[lt.S]);
-        mj = { S: lt.S, zoneS, pMin: cur[lt.J].pips, out: i => !zoneS.has(i) && i !== lt.S, J: lt.J, Cp: lt.Cp };
-        mjReady = true; protCells.add(lt.J); protCells.add(lt.Cp);
-      }
-      if (mjReady && (obs.phase === 'intro' || magNow)) ST.mjLatch = { wave: obs.wave, S: mj.S, J: mj.J, Cp: mj.Cp };
-      if (magCase && hasStar) { const stt = mj ? (mjReady ? '準備完了' : mj.J >= 0 ? 'B（外のコンボ待ち）' : `A（出目${mj.pMin}以上のジョーカー狙い）`) : 'なし：' + mjWhy;
-        if (ST.mjState !== stt) { ST.mjState = stt; ctx.log(`中出目ジョーカーの状態：${stt}`); } } else ST.mjState = '';
       // ---- 活性を切りたい場面（マジシャン・レオンを受ける） ----
       const moonThreat = magNow && pend.some(q => q.cells.some(i => cur[i] && cur[i].type === 'moon' && (cur[i].pips === 7 || i === main)));
       let wantInactive = false;
-      if (magTake && !moonThreat && !mjReady) {
+      if (magTake && !moonThreat) {
         if (obs.phase === 'wave' && tl <= o.deactLead && leadProg < o.flowProg) wantInactive = true;
         if (obs.phase === 'intro') wantInactive = true;
         if (magNow && leadProg < o.magKillProg && obs.boss.cast < 2 + (pend.length ? 1 : 0)) wantInactive = true;
@@ -534,20 +445,17 @@ RD.defineAgent('moon_combo_paradise_toa', {
       // ---- 放置・保持・押し返し ----
       if (!act0 || obs.phase !== 'wave' || leadProg <= o.pushBackTo) ST.push = false;
       else if (strong && leadProg >= o.pushProg) ST.push = true;
-      // 送り込み最大の雑魚を1つ目の角までに処理できるか
-      const zs = (zk.find(e => e.kind === 'normal') || {}).baseSpeed || o.zakoSpeed;
-      const enough = fz0 >= o.maxInflowPerDt / waveDt(w) * H && H / Math.max(fz0, 1) <= o.corner1 / zs;
       const wA = obs.wave + o.idleAhead;
       const idleNeedZ = inflow(wA, tableHP(wA, spawnSteps(wA))), idleNeedB = bossPred(wA, 0) / (bossTravel(wA) * o.bossKillFrac);
-      const idle = hasStar && act0 && enough && obs.sp >= o.idleMinSp && fz0 >= o.idleZ * idleNeedZ && fb0 >= o.idleB * idleNeedB && rz >= 1 && !knight && !acceptEarn && !wantInactive && !magNow && !magPre;
+      const idle = hasStar && act0 && obs.sp >= o.idleMinSp && fz0 >= o.idleZ * idleNeedZ && fb0 >= o.idleB * idleNeedB && rz >= 1 && !knight && !acceptEarn && !wantInactive && !magNow && !magPre;
       const hold = strongAct && !acceptEarn && !wantInactive && !magPre && !(magNow && pend.length)
-        && ((obs.phase === 'wave' && enough && (elFrac >= o.holdFrac || ST.push)) || bossNow || obs.phase === 'intro');
+        && ((obs.phase === 'wave' && (elFrac >= o.holdFrac || ST.push)) || bossNow || obs.phase === 'intro');
       const earnWin = strong && !hold && !idle && (obs.phase === 'wave' || obs.phase === 'wait' || obs.phase === 'roll' || obs.phase === 'cleanup');
       if (earnWin && !wantInactive) ST.wantFast = true;
       // 稼ぎの間（先頭が押し返しの線より手前）は、活性が一時的に切れるのを気にせず合成・召喚する
       const earnFree = o.earnFree && earnWin && !wantInactive && (obs.phase !== 'wave' || leadProg < o.pushProg);
       if (!act0 && (bossNow || obs.phase === 'intro') && !wantInactive) ST.wantFast = true;
-      setMode(idle ? '放置' : hold ? (ST.push ? '押し返し' : '保持') : wantInactive ? '活性を切る' : acceptEarn ? '受ける（稼ぎ）' : earnWin ? (enough || obs.phase !== 'wave' ? '稼ぎ' : '稼ぎ（火力不足）') : '通常');
+      setMode(idle ? '放置' : hold ? (ST.push ? '押し返し' : '保持') : wantInactive ? '活性を切る' : acceptEarn ? '受ける（稼ぎ）' : earnWin ? '稼ぎ' : '通常');
 
       const canAct = !ctl.dragging && !(ctl.actReadyIn > 0);
       const acts = obs.legal.acts.filter(a => a.result === 'merge' || a.result === 'copy');
@@ -561,14 +469,8 @@ RD.defineAgent('moon_combo_paradise_toa', {
           if (early.has(a.from) || early.has(a.to)) continue;
           const x = cur[a.from], y = cur[a.to];
           if (!x || !y) continue;
-          if (!opt.mj && (protCells.has(a.from) || protCells.has(a.to))) continue;
           const isMerge = a.result === 'merge';
           if (!isMerge && y.type === 'moon' && !opt.moonCopy && !(leonAccept && x.pips === 7)) continue;
-          // 火力が安定するまでは成長同士を合成しない
-          if (o.noGrowthPairUntilStrong && !strong && !opt.gg && isMerge && x.type === 'growth' && y.type === 'growth') continue;
-          // 1ウェーブのジョーカーはコンボのコピーだけ（出目2以上で同じ出目のコンボがなければ成長のコピーもよい）
-          if (o.w1JokerCombo && obs.wave === 1 && (x.type === 'joker' || y.type === 'joker')
-            && !(!isMerge && (y.type === 'combo' || (y.type === 'growth' && x.pips >= o.jokerGrowthMinPips && !hasCombo(x.pips))))) continue;
           if (!opt.all && isMerge && sixZone && x.pips === 5 && sixZone.has(a.to) && !has6Free && !mixAll) continue; // 主の月の隣で出目6を作らない
           if (critOps && isMerge && critCell[a.to] != null && critCell[a.from] == null && !pendCells.has(a.to) && x.pips + 1 > o.critMaxPips
             && acts.some(q => q.from === a.to && q.to === a.from)) continue;
@@ -613,7 +515,7 @@ RD.defineAgent('moon_combo_paradise_toa', {
             });
             E = (o.eff && o.eff[key]) || 0;
           }
-          const repair = careNow && !act0 && actAfter >= 0.79;
+          const repair = !act0 && actAfter >= 0.79;
           const S = E - o.lowFirst * x.pips + ev - phiNow + bonus;
           list.push({ a, S, key, repair, x, y, actAfter, combo1, lowPair, zoneOut });
         }
@@ -640,110 +542,22 @@ RD.defineAgent('moon_combo_paradise_toa', {
       const pick = list => list.reduce((p, c) => !p || c.S > p.S ? c : p, null);
       const growKeys = ['adaptive+growth', 'growth+growth', 'joker>growth'];
 
-      // ---- マジシャン前の中出目ジョーカー：手順 ----
-      if (mj) {
-        const { S, zoneS, pMin, out, J, Cp } = mj;
-        const usable = i => out(i) && cur[i] && cur[i].type !== 'moon' && !protCells.has(i) && !cur[i].sealed;
-        // 外で盤面を回す（出目が P に入るダイスを作る合成を高く）。打つ合成がなければ召喚
-        const rot = (P, tag) => {
-          if (canAct) {
-            const list = evalActs({ all: true }).filter(c => c.a.result === 'merge' && usable(c.a.from) && usable(c.a.to));
-            for (const c of list) c.R = c.S + (P.has(c.x.pips + 1) ? o.rotMatchBonus : 0);
-            const b = list.reduce((q, c) => !q || c.R > q.R ? c : q, null);
-            if (b && b.R > -o.rotMaxLoss) return opAct(b.a, `中出目ジョーカー：${tag} ${b.key} 出目${b.x.pips} ${b.a.from}→${b.a.to}`);
-          }
-          if (obs.legal.summon && !(ctl.summonReadyIn > 0) && obs.sp - obs.summonCost >= o.reserveSummons * obs.summonCost) return { ops: [{ op: 'summon' }], more: true, note: `中出目ジョーカー：${tag} 召喚` };
-          return null;
-        };
-        const zoneCombos = [...zoneS].filter(i => cur[i] && cur[i].type === 'combo' && cur[i].pips < 7 && !cur[i].sealed);
-        const partnerOf = i => { for (let t = 0; t < 15; t++) if (usable(t) && cur[t].pips === cur[i].pips && ['combo', 'adaptive', 'joker'].includes(cur[t].type)) return t; return -1; };
-        if (magNow) {
-          // E) メテオが星の月に落ちそう／メテオが落ちた後／ボスが進んできた → コンボをコピーして倒す
-          if (mjReady && (moonThreat || leadProg >= o.magKillProg || (obs.boss.cast >= 2 && !pend.length))) {
-            ST.wantFast = true;
-            const a = canAct ? acts.find(q => q.result === 'copy' && q.from === J && q.to === Cp) : null;
-            if (a) return opAct(a, `中出目ジョーカー：出目${cur[J].pips}のコンボをコピーして倒す ${J}→${Cp}${moonThreat ? '（メテオが月に落ちる）' : ''}`);
-            if (!canAct) return null;
-          }
-        } else if (obs.phase === 'intro') {
-          // D) 演出中：星の月の隣のコンボを外へ逃がす
-          if (mjReady) {
-            ST.wantFast = true;
-            if (!canAct) return null;
-            for (const i of zoneCombos) {
-              const t = partnerOf(i); if (t < 0) continue;
-              const a = cur[t].type === 'joker' ? acts.find(q => q.result === 'copy' && q.from === t && q.to === i)
-                                                : acts.find(q => q.result === 'merge' && q.from === i && q.to === t);
-              if (a) return opAct(a, `中出目ジョーカー：星の月の隣のコンボ${cur[i].pips}を逃がす ${a.from}→${a.to}`);
-            }
-          }
-        } else if (obs.phase === 'wave' && act0) {
-          if (J < 0) {
-            // A) 星の月の隣の1マスへ合成を重ねて、出目 pMin 以上のジョーカーを狙う
-            if (enough) {
-              const cand = [...zoneS].filter(i => cur[i] && cur[i].type !== 'moon' && cur[i].pips < 7 && !cur[i].sealed);
-              let W = ST.mjW != null && cand.includes(ST.mjW) ? ST.mjW : -1;
-              if (W < 0 && cand.length) W = cand.reduce((q, i) => { const r = x => (cur[x].type === 'combo' ? 10 : 0) + cur[x].pips; return r(i) < r(q) ? i : q; });
-              ST.mjW = W >= 0 ? W : null;
-              if (W >= 0) {
-                const d = cur[W];
-                if (canAct) {
-                  const pool = acts.filter(q => q.result === 'merge' && ((q.to === W && usable(q.from)) || (q.from === W && usable(q.to))));
-                  const a = d.pips >= 5 ? pool.find(q => q.from === W) : pool.find(q => q.to === W);
-                  if (a) return opAct(a, d.pips >= 5 ? `中出目ジョーカー：隣の出目${d.pips}を外へ逃がす ${a.from}→${a.to}` : `中出目ジョーカー：隣のマスへ合成 出目${d.pips} ${a.from}→${a.to}（出目${pMin}以上のジョーカー狙い）`);
-                }
-                const r = rot(new Set([d.pips]), `隣のマスの相方（出目${d.pips}）を作る`); if (r) return r;
-              }
-            }
-          } else if (Cp < 0) {
-            // B) ジョーカーと同じ出目のコンボを外に作る
-            const r = rot(new Set([cur[J].pips]), `出目${cur[J].pips}のコンボを外に作る`); if (r) return r;
-          } else {
-            // C) 星の月の隣のコンボの逃がし先を外に作る（できた逃がし先は、ふつうの手では使わない）
-            const need = new Set();
-            for (const i of zoneCombos) { const t = partnerOf(i); if (t >= 0) protCells.add(t); else need.add(cur[i].pips); }
-            if (need.size) { const r = rot(need, `逃がし先（出目${[...need].join('・')}）を作る`); if (r) return r; }
-          }
-        }
-      }
-
-      // ---- 成長を潰す：処理が追いついているときは、点数に関係なく先に（出目の高い成長から） ----
-      const hazG = cur.filter(d => d && d.type === 'growth' && d.pips >= o.growHazPips && d.pips < 7 && !d.sealed);
-      let allActs = null; // 候補の点数（1回の判断で使い回す）
-      if (hazG.length && strongAct && enough && canAct && !wantInactive && !acceptEarn && !magNow && !magPre) {
-        allActs = evalActs({});
-        const list = allActs.filter(c => growKeys.includes(c.key) && c.x.pips >= o.growHazPips && !pendCells.has(c.a.to) && !inZoneCombo(c.a.from) && !inZoneCombo(c.a.to));
-        const top = list.reduce((p, c) => !p || c.x.pips > p.x.pips || (c.x.pips === p.x.pips && c.S > p.S) ? c : p, null);
-        const best = top ? leftward(top, list.filter(c => c.x.pips === top.x.pips)) : null;
-        if (best) return opAct(best.a, `成長を潰す ${best.key} 出目${best.x.pips} ${best.a.from}→${best.a.to} S=${best.S.toFixed(2)}`);
-      }
-
-      // ---- 放置・保持（危なければ緊急のPU。潰せない出目の高い成長があれば、相方を狙って盤面を回す） ----
+      // ---- 放置・保持（成長を潰す手だけ。危なければ緊急のPU） ----
       if (idle || hold) {
         if ((danger || pressed) && o.puMode !== 'never') { const r = tryPu(danger ? '危ない' : '押されている'); if (r) return r; }
-        const bigP = new Set(hazG.filter(d => d.pips >= o.rotGrowPips).map(d => d.pips));
-        if (!bigP.size || obs.phase !== 'wave' || !enough) return null;
-        if (canAct) {
-          const moonKey = i => cur[i].type === 'moon' && (cur[i].pips === 7 || i === main);
-          const list = (allActs || evalActs({})).filter(c => !inZoneCombo(c.a.from) && !inZoneCombo(c.a.to) && !moonKey(c.a.from) && !moonKey(c.a.to));
-          for (const c of list) c.R = c.S + (c.a.result === 'merge' && bigP.has(c.x.pips + 1) ? o.rotMatchBonus : 0);
-          const best = list.reduce((p, c) => !p || c.R > p.R ? c : p, null);
-          if (best && best.R > -o.rotMaxLoss) return opAct(best.a, `盤面を回す（成長${[...bigP].join('・')}の相方狙い） ${best.key} 出目${best.x.pips} ${best.a.from}→${best.a.to} S=${best.S.toFixed(2)}`);
-        }
-        if (obs.legal.summon && !(ctl.summonReadyIn > 0) && obs.sp - obs.summonCost >= o.reserveSummons * obs.summonCost) {
-          const empt = []; for (let i = 0; i < 15; i++) if (!cur[i]) empt.push(i);
-          let ev = 0;
-          for (const i of empt) deckTypes.forEach((t, ti) => { const b = cur.slice(); b[i] = mk(t, 1); ev += deckW[ti] * phi(future(b), n0) / empt.length; });
-          if (ev - phiNow > -o.rotMaxLoss) return { ops: [{ op: 'summon' }], more: true, note: `召喚（成長${[...bigP].join('・')}の相方狙い）` };
-        }
-        return null;
+        if (!canAct) return null;
+        const hz = cur.some(d => d && d.type === 'growth' && d.pips >= o.growHazPips && d.pips < 7);
+        if (!hz) return null;
+        const list = evalActs({}).filter(c => growKeys.includes(c.key) && c.x.pips >= o.growHazPips && c.S > 0 && !pendCells.has(c.a.to));
+        const best = leftward(pick(list), list);
+        return best ? opAct(best.a, `成長を潰す ${best.key} 出目${best.x.pips} ${best.a.from}→${best.a.to} S=${best.S.toFixed(2)}`) : null;
       }
 
       // ---- マジシャン合わせ ----
       if (magNow && o.magSync && magTake && pend.length && !moonThreat) {
         ST.wantFast = true;
-        const sm = obs.legal.summon && !(ctl.summonReadyIn > 0) ? { ops: [{ op: 'summon' }], more: true, note: 'マジシャン合わせ：召喚' } : null;
-        if (!canAct) return sm; // ドラッグ中・間隔待ちの間に召喚する
+        if (obs.legal.summon && !(ctl.summonReadyIn > 0)) return { ops: [{ op: 'summon' }], more: true, note: 'マジシャン合わせ：召喚' };
+        if (!canAct) return null;
         const prot = i => (cur[i].type === 'moon' && (cur[i].pips === 7 || i === main)) || inZoneCombo(i) || (cur[i].type === 'combo' && cur[i].pips >= o.magSyncComboMax);
         const list = evalActs({ all: true }).filter(c => !prot(c.a.from));
         const c1 = list.filter(c => pendCells.has(c.a.to) && !pendCells.has(c.a.from));
@@ -753,11 +567,6 @@ RD.defineAgent('moon_combo_paradise_toa', {
         const c2 = list.filter(c => c.a.result === 'merge' && !pendCells.has(c.a.to) && !pendCells.has(c.a.from) && want.has(c.x.pips + 1) && !prot(c.a.to));
         best = pick(c2);
         if (best) return opAct(best.a, `マジシャン合わせ：相手を作る ${best.key} 出目${best.x.pips} ${best.a.from}→${best.a.to}`);
-        if (sm) return sm;
-        // 相方・ジョーカー・適応が生まれるまで盤面を回す（予告マス・月・火力ゾーンのコンボは使わない）
-        const c3 = list.filter(c => !pendCells.has(c.a.to) && !pendCells.has(c.a.from) && !prot(c.a.to) && cur[c.a.to].type !== 'moon' && cur[c.a.from].type !== 'moon');
-        best = pick(c3);
-        if (best) return opAct(best.a, `マジシャン合わせ：盤面を回す ${best.key} 出目${best.x.pips} ${best.a.from}→${best.a.to}`);
         return null;
       }
       if (moonThreat) ST.wantFast = true;
@@ -790,26 +599,6 @@ RD.defineAgent('moon_combo_paradise_toa', {
         // 切る手がなければ、そのまま通常の動きへ
       }
 
-      // ---- 1ウェーブ：出目の低い月のペアはすぐ合成 ----
-      if (obs.wave === 1 && canAct) {
-        const f = acts.filter(a => a.result === 'merge' && cur[a.from] && cur[a.to] && cur[a.from].type === 'moon' && cur[a.to].type === 'moon'
-          && cur[a.from].pips <= o.w1MoonPairMax && !early.has(a.from) && !early.has(a.to));
-        if (f.length) {
-          const rank = a => cur[a.from].pips * 100 + (critCell[a.to] != null ? 50 : 0) + (a.to % 5) * 3 - Math.floor(a.to / 5);
-          const a = f.reduce((p, q) => rank(q) < rank(p) ? q : p);
-          return opAct(a, `1W：月${cur[a.from].pips}のペアを合成 ${a.from}→${a.to}`);
-        }
-      }
-
-      // ---- 序盤のジョーカー：1ウェーブはすぐコンボをコピー。出目2以上で同じ出目のコンボがなければ成長をコピー（火力が安定するまで） ----
-      if (canAct && (obs.wave === 1 || !strong)) {
-        const cp = acts.filter(a => a.result === 'copy' && cur[a.from] && cur[a.to] && !early.has(a.from) && !early.has(a.to));
-        const c1 = o.w1JokerCombo && obs.wave === 1 ? cp.find(a => cur[a.to].type === 'combo') : null;
-        if (c1) return opAct(c1, `1W：ジョーカー${cur[c1.from].pips}でコンボをコピー ${c1.from}→${c1.to}`);
-        const c2 = cp.find(a => cur[a.to].type === 'growth' && cur[a.from].pips >= o.jokerGrowthMinPips && !hasCombo(cur[a.from].pips));
-        if (c2) return opAct(c2, `ジョーカー${cur[c2.from].pips}で成長をコピー（同じ出目のコンボなし） ${c2.from}→${c2.to}`);
-      }
-
       // ---- レオン前（2Wまで）：出目1コンボを合成 ----
       if (leonPre && obs.wave <= o.leonForceToWave && canAct) {
         const f = obs.legal.acts.filter(a => a.result === 'merge' && obs.board[a.from].pips === 1
@@ -825,7 +614,7 @@ RD.defineAgent('moon_combo_paradise_toa', {
 
       // ---- 重ねる操作（合成が先） ----
       // ジョーカーで月をコピーしてよいのは：序盤／活性していなくて、ボス前の演出・ボス戦・ウェーブ終わり・危ないとき（最後の手段）
-      const lastResort = careNow && !act0 && (bossNow || danger || (obs.phase === 'wave' && tl <= 3) || (obs.phase === 'intro' && (obs.introLeft == null || obs.introLeft <= 1.2 || !obs.legal.summon)));
+      const lastResort = !act0 && (bossNow || danger || (obs.phase === 'wave' && tl <= 3) || (obs.phase === 'intro' && (obs.introLeft == null || obs.introLeft <= 1.2 || !obs.legal.summon)));
       const moonCopyOk = obs.wave <= o.moonCopyFreeToWave || lastResort;
       const shortNow = rz < o.notFullShort;
       const okKeys = !strong ? (obs.wave >= o.fullOnlyFromWave ? ['joker>combo'] : o.notFullKeysEarly) : o.notFullKeysToa;
@@ -840,7 +629,6 @@ RD.defineAgent('moon_combo_paradise_toa', {
           return okKeys.includes(c.key);
         });
         best = leftward(pick(list), list);
-        if (!best && full && o.noGrowthPairUntilStrong && !strong) { const l2 = evalActs({ moonCopy: moonCopyOk, gg: true }); best = leftward(pick(l2), l2); } // ほかに手がないときだけ成長同士
         stuck = full && (!best || best.S <= o.stuckS);
         if (best) {
           let ok;
@@ -862,7 +650,7 @@ RD.defineAgent('moon_combo_paradise_toa', {
       if (obs.legal.summon && !(ctl.summonReadyIn > 0) && !stopSummon && (canAct || !act0 || !strong)) {
         const reserveOk = !strong || obs.wave < o.reserveFromWave || !act0 || danger || obs.sp - obs.summonCost >= o.reserveSummons * obs.summonCost;
         if (reserveOk) {
-          if ((careNow && !act0) || rz < 1 || earnFree) return { ops: [{ op: 'summon' }], more: true, note: act0 || !careNow ? (earnFree && rz >= 1 ? '召喚（稼ぎ）' : '召喚（雑魚火力が足りない）') : '召喚（活性を戻す）' };
+          if (!act0 || rz < 1 || earnFree) return { ops: [{ op: 'summon' }], more: true, note: act0 ? (earnFree && rz >= 1 ? '召喚（稼ぎ）' : '召喚（雑魚火力が足りない）') : '召喚（活性を戻す）' };
           const empt = []; for (let i = 0; i < 15; i++) if (!cur[i]) empt.push(i);
           let ev = 0;
           for (const i of empt) deckTypes.forEach((t, ti) => { const b = cur.slice(); b[i] = mk(t, 1); ev += deckW[ti] * phi(future(b), n0) / empt.length; });

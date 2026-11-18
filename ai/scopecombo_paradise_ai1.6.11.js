@@ -1,4 +1,34 @@
-// 楽園スココンAI 1.6.0（AI API v1／AI_AGENT_GUIDE 1.8.0・AIRandomDicesim 3.3.1 で確認）
+// 楽園スココンAI 1.6.11（AI API v1／AI_AGENT_GUIDE 1.8.0・AIRandomDicesim 4.1.0 で確認）
+//   1.6.11：間隔0.1秒は暗殺対面だけに戻した（ほかの対面は判断0.5秒・重ねる操作とドラッグ0.2秒）
+//   1.6.10：どの対面でも判断・重ねる操作・ドラッグ・召喚の間隔を0.1秒に。
+//           暗殺対面の2つ目の角の後のコンボの合成は、盤面のコンボの総出目が3を下回るものをしない（1.6.9は出目3未満のコンボを使わない）
+//           懸賞金暗殺AI相手30試合：21勝（1.6.9は23勝）。月太陽盾相手の到達ウェーブ（シミュレータ4.3.4、20試合×2組）：35.1
+//   1.6.9：暗殺対面（相手：生贄・懸賞金・暗殺・適応・ジョーカー、光のプリズム）の動きを追加。この対面ではほかの動きはしない
+//          判断・操作の間隔0.1秒。暗殺をよける → SPがあれば召喚 → 先頭が2つ目の角を曲がったら合成
+//          よけ方（対象の種類ごと、上から順にできるもの。合成の相手は懸賞金のついていないダイス）
+//            ジョーカー：召喚→コンボ→適応→スコープをコピー
+//            召喚：適応と合成→召喚と合成→ジョーカーで召喚をコピーして、次にその召喚と合成
+//            適応：召喚→コンボ→スコープ→適応と合成して逃がす
+//            コンボ：適応と合成→コンボと合成→ジョーカーでコンボをコピーして、次にそのコンボと合成
+//          2つ目の角を曲がった後：楽園マスのスコープへスコープ→適応を合成、召喚＋適応、召喚同士、
+//            コンボ→適応、コンボ→コンボ（1.6.10からは、盤面のコンボの総出目が3を下回る合成はしない）。同じ段は出目の低い組から
+//          対戦30試合（相手：懸賞金暗殺AI 1.3〔判断1秒〕・光のプリズム、こちら伝説11・適応15・CD3000%、シミュレータ4.3.4）：
+//            1.6.8 7勝（暗殺の回避84・被弾362）→ 1.6.9 23勝（回避340・被弾214）。速さを0.5秒にすると18勝
+//   1.6.8：最後の隣接をなくす手の禁止を、総数に応じたためらい（減点）に変えた。総数500超だけ禁止（詰みの扱いは1.6.7と同じ）。
+//          スコープに隣接可能なマス（盤面の外と、コンボ以外の出目7のマスを除く）が少ないほど強くためらう
+//          到達ウェーブ（1.6.1と同じ条件、20試合×3組）：1.6.1 37.3／1.6.7 32.8／1.6.8（kAdjKill 1.5）36.3／kAdjKill 3.0 34.8
+//          （試合中の総数はおおむね300前後までで、500を超える場面はほとんどない）
+//   1.6.7：1.6.5 の禁止に、詰んだときの扱いを追加。ナイト・レオン前の残り20秒以下は禁止を外す、それ以外はジョーカーのコピーで新しい隣接を作る
+//          （1.6.6 の「隣接が少ないときの新しい隣接の加点」はやめた）
+//          到達ウェーブ（20試合×3組）：1.6.7 32.8（1.6.5 32.7とほぼ同じ）。5試合の詰み315回はすべて、ナイト・レオン以外の前・ボス戦中で、
+//          作れる新しい隣接もなく、何もしなかった
+//   1.6.6：隣接が少ないとき、ジョーカーのコピーで新しい隣接を作る手に加点／詰んだら隣接の禁止を外す
+//          （1.6.6の到達ウェーブ：1.6.1 37.3／1.6.5 32.7／1.6.6 35.1／禁止なしで新しい隣接の加点だけ 36.3）
+//   1.6.5：1.6.1 に、最後のスコープとコンボの隣接をなくす合成の禁止を追加（keepLastAdj）
+//          到達ウェーブ（1.6.1と同じ条件、20試合×3組）：1.6.1 37.3 → 1.6.5 32.7。5試合で、盤面が埋まっていて禁止の手しかなく何もしなかった判断が315回
+//   1.6.1：1.6.0 に、盤面の総数が多いほど火力の重み（kFire・kShort）を上げる倍率を追加（fireWMul・fireWRef）
+//          到達ウェーブ（相手：月太陽盾・クラス15・CD50000・航海日記・月太陽AI、こちらCD3000%、シミュレータ4.1.0、20試合×3組）：
+//          1.6.0 31.8 → fireWMul 0.5 37.3（既定）。1と2は2組だけで 35.0・32.9
 //   1.1.0：ハッキングは予告で逃げず、食らった後に合成で消す／楽園マスを高い出目にしない／
 //          ジョーカー・適応を「コンボ数の素」として価値を持たせる（スコープを潰すのは適応から）／マジシャン戦は総数を消す手を高く
 //   1.2.0：楽園マスの出目の上限（2）をやめ、出目6以上だけを重く減点する形に
@@ -19,7 +49,7 @@
 //             （今の種類での値は knightActual の割合だけ）。楽園マスの出目1コンボを合成で消しても、ボス火力はほとんど下がらない
 // 登録ID：scopecombo_paradise（スコープコンボ基礎AI〔scopecombo_basic〕と同時に読み込める）
 // 想定デッキ：スコープ11・コンボ11・適応15・召喚11・ジョーカー11、フィールド：神々の楽園
-// 判断の間隔0.5秒、重ねる操作の間隔0.2秒・ドラッグ0.2秒（limits で指定）
+// 判断の間隔0.5秒、重ねる操作の間隔0.2秒・ドラッグ0.2秒（limits で指定）。暗殺対面だけ、すべて0.1秒（assassinSpeed）
 //
 // 1回の判断（1つ実行するごとに more:true で盤面を見直す）
 //   1) PU：puPlan の順（1.10.0 と同じ。SPが足りなければ後ろのPUは見ない）
@@ -82,6 +112,16 @@ RD.defineAgent('scopecombo_paradise', {
     kWMag: 4.0,              // マジシャン戦中の総数の重み（メテオで総数を消す手を高く）
     kTok: 1.0, tokJoker: 1.5, tokAdaptive: 0.7, // コンボ数の素（ジョーカー・適応）の価値
     critMaxPips: 7,          // 楽園マスへ合成してよい出目の上限（合成後の出目。逆向きに合成できるなら、楽園マスへは合成しない）。7＝制限なし（減点 critPen だけで調整）
+    // 暗殺対面：相手のデッキが assassinDeck（とフィールド assassinField）のときだけ、ほかの動きをせず下の動きにする
+    assassinMode: true, assassinDeck: ['sacrifice', 'bounty', 'assassin', 'adaptive', 'joker'], assassinField: 'prism',
+    assassinSpeed: 0.1,      // 暗殺対面の判断・重ねる操作・ドラッグ・召喚の間隔（秒）
+    cornerPos: 8.5,          // 2つ目の角（入口からの距離）
+    cornerComboMin: 3,       // 2つ目の角を曲がった後のコンボの合成：盤面のコンボの総出目がこれを下回る合成はしない
+    keepLastAdj: true,
+    adjBanW: 500,            // 盤面の総数がこれを超えたら、最後の隣接をなくす手は禁止（以下ではためらう）
+    kAdjKill: 1.5, adjCapW: 2.0, // ためらいの減点＝kAdjKill×(総数/adjBanW)×(1＋adjCapW/(1＋隣接可能マス数))
+    unlockLeft: 20,          // 詰んだとき、ナイト・レオン前のこの残り秒以下なら最後の隣接をなくす手の禁止を外す（それ以外は新しい隣接を作る）       // 盤面に残っている最後のスコープとコンボの隣接をなくす合成をしない（false で1.6.1と同じ）
+    fireWMul: 0.5, fireWRef: 64, // 火力の重みの倍率＝1＋fireWMul×盤面の総数/fireWRef（総数64で1.5倍、192で2.5倍。0で1.6.0と同じ）
     kFire: 4.0, kShort: 2.0, marginHi: 2.5, bossWeightMin: 0.3,
     bossHpMul: 8,            // シミュレータの cfg.bossHpMul（AIには見えないので同じ値を書く）
     bossKillFrac: 0.8,       // ボスはゴールまでの時間のこの割合で倒したい
@@ -130,8 +170,82 @@ RD.defineAgent('scopecombo_paradise', {
     const pairKey = (x, y) => [x, y].sort().join('+');
     const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
+    // ---- 暗殺対面（相手：生贄・懸賞金・暗殺・適応・ジョーカー／光のプリズム）----
+    const oppTypes = (info.opponentDeck || []).map(d => d.type).sort().join(',');
+    const assDeck = (o.assassinDeck || []).slice().sort().join(',');
+    let assMode = null;            // null＝まだ決めていない
+    const SPEED = o.assassinSpeed;
+    const assassinDecide = obs => {
+      const b = obs.board, ctl = obs.control || {};
+      const free = d => d && !d.sealed && !(d.bounty > 0);       // 懸賞金のついていないダイス
+      const has = (from, to, res) => obs.legal.acts.find(a => a.from === from && a.to === to && a.result === res);
+      const act = (a, note) => ({ ops: [{ op: 'act', from: a.from, to: a.to, fromId: b[a.from].id, toId: b[a.to].id, expect: a.result }], more: true, note: '暗殺対面：' + note });
+      const cellsOf = (t, pips, ok = () => true) => [...Array(15).keys()].filter(i => b[i] && b[i].type === t && b[i].pips === pips && ok(b[i]));
+      const busy = ctl.dragging || ctl.actReadyIn > 0;
+      // 1) 飛んできた暗殺をよける（着弾の早いものから）
+      const incoming = (obs.pending || []).filter(q => q.kind === 'assassin' && q.from === 'opponent' && q.in > (ctl.dragTime || 0))
+        .sort((p, q) => p.in - q.in);
+      if (!busy) for (const q of incoming) for (const i of q.cells) {
+        const d = b[i]; if (!d || d.sealed) continue;
+        // 対象を相手に合成する（対象を動かす向きを先に）
+        const mergeWith = (t, ok) => { for (const j of cellsOf(t, d.pips, ok)) { if (j === i) continue; const a = has(i, j, 'merge') || has(j, i, 'merge'); if (a) return a; } return null; };
+        const jokerCopyTarget = () => { for (const j of cellsOf('joker', d.pips, free)) { const a = has(j, i, 'copy'); if (a) return a; } return null; };
+        let a = null, note = '';
+        if (d.type === 'joker') {
+          for (const t of ['summon', 'combo', 'adaptive', 'scope']) { for (const j of cellsOf(t, d.pips)) { a = has(i, j, 'copy'); if (a) break; } if (a) { note = `ジョーカー${i}に暗殺→${t}をコピー`; break; } }
+        } else if (d.type === 'summon') {
+          if ((a = mergeWith('adaptive', free))) note = `召喚${i}に暗殺→適応と合成`;
+          else if ((a = mergeWith('summon', free))) note = `召喚${i}に暗殺→召喚と合成`;
+          else if ((a = jokerCopyTarget())) note = `召喚${i}に暗殺→ジョーカーで召喚をコピー（次に合成）`;
+        } else if (d.type === 'adaptive') {
+          for (const t of ['summon', 'combo', 'scope', 'adaptive']) if ((a = mergeWith(t, free))) { note = `適応${i}に暗殺→${t}と合成して逃がす`; break; }
+        } else if (d.type === 'combo') {
+          if ((a = mergeWith('adaptive', free))) note = `コンボ${i}に暗殺→適応と合成`;
+          else if ((a = mergeWith('combo', free))) note = `コンボ${i}に暗殺→コンボと合成`;
+          else if ((a = jokerCopyTarget())) note = `コンボ${i}に暗殺→ジョーカーでコンボをコピー（次に合成）`;
+        }
+        if (a) return act(a, note);
+      }
+      // 2) SPがあれば召喚
+      if (obs.legal.summon && !(ctl.summonReadyIn > 0)) return { ops: [{ op: 'summon' }], more: true, note: '暗殺対面：召喚' };
+      if (busy) return null;
+      // 3) 先頭の敵が2つ目の角（入口から cornerPos）を曲がったら
+      const lead = obs.enemies.length ? obs.enemies[0].pos : 0;
+      if (lead < o.cornerPos) return null;
+      const merges = obs.legal.acts.filter(a => a.result === 'merge');
+      const low = L => L.sort((p, q) => b[p.from].pips - b[q.from].pips || p.from - q.from)[0];
+      const T = (a, x, y) => b[a.from].type === x && b[a.to].type === y;
+      const crit = new Set(((obs.field && obs.field.paradise) || []).map(z => z.cell));
+      let a;
+      // 楽園マスの上のスコープへ、スコープか適応を合成
+      if ((a = low(merges.filter(a => crit.has(a.to) && b[a.to].type === 'scope' && b[a.from].type === 'scope'))))
+        return act(a, `2つ目の角：楽園マスのスコープ${a.to}へスコープを合成`);
+      if ((a = low(merges.filter(a => crit.has(a.to) && b[a.to].type === 'scope' && b[a.from].type === 'adaptive'))))
+        return act(a, `2つ目の角：楽園マスのスコープ${a.to}へ適応を合成`);
+      // 召喚と適応 → 召喚同士
+      if ((a = low(merges.filter(a => T(a, 'summon', 'adaptive') || T(a, 'adaptive', 'summon'))))) return act(a, '2つ目の角：召喚＋適応');
+      if ((a = low(merges.filter(a => T(a, 'summon', 'summon'))))) return act(a, '2つ目の角：召喚同士');
+      // コンボ→適応 → コンボ→コンボ（出目 cornerComboMin 未満のコンボは使わない）
+      // コンボの総出目（盤面のコンボの出目の合計）が cornerComboMin を下回る合成はしない。合成でできる種類は抽選なので数えない
+      const comboSum = b.reduce((x, d) => x + (d && d.type === 'combo' ? d.pips : 0), 0);
+      const okC = a => comboSum - [a.from, a.to].reduce((x, i) => x + (b[i].type === 'combo' ? b[i].pips : 0), 0) >= o.cornerComboMin;
+      if ((a = low(merges.filter(a => T(a, 'combo', 'adaptive') && okC(a))))) return act(a, '2つ目の角：コンボ→適応');
+      if ((a = low(merges.filter(a => T(a, 'combo', 'combo') && okC(a))))) return act(a, '2つ目の角：コンボ→コンボ');
+      return null;
+    };
+
     return { decide(obs) {
       if (obs.call > 0 && obs.results.some(r => r.reason === 'limit')) return null;
+      if (assMode === null) {
+        const f = obs.opponent && obs.opponent.field;
+        const fid = f && typeof f === 'object' ? f.id : f;
+        assMode = !!(o.assassinMode && assDeck && oppTypes === assDeck && (!o.assassinField || fid === o.assassinField));
+        if (assMode) {
+          const r = assassinDecide(obs) || { ops: [], more: true };
+          return Object.assign(r, { limits: { interval: SPEED, actInterval: SPEED, dragTime: SPEED, summonInterval: SPEED }, note: '暗殺対面の動きに切り替え' + (r.note ? '：' + r.note : '') });
+        }
+      }
+      if (assMode) return assassinDecide(obs);
 
       // 1) PU
       for (const [w, type, lv] of o.puPlan || []) {
@@ -240,6 +354,9 @@ RD.defineAgent('scopecombo_paradise', {
       };
       const base0 = future(cur);
       const tau = clamp(1 - room(base0) / o.Lref, 0, 1);
+      // 盤面の総数（Σ2^(出目−1)）が多いほど、火力の重みを上げる（合成・コピーでは総数は変わらないので、今の盤面の値で決める）
+      const W0 = base0.reduce((s, d) => s + (d ? Math.pow(2, d.pips - 1) : 0), 0);
+      const fireMul = 1 + o.fireWMul * W0 / o.fireWRef;
 
       // 火力
       const fire = (b, n) => {
@@ -301,8 +418,8 @@ RD.defineAgent('scopecombo_paradise', {
         v += magV;
         const [fb, fz] = fire(b, n);
         const u = r => o.marginHi * (1 - Math.exp(-Math.max(r, 0) / o.marginHi)); // 余裕が大きいほど伸びが小さくなる
-        v += o.kFire * (wz * u(fz / needZ) + wb * u(fb / needB));
-        v += o.kShort * (wz * Math.min(0, fz / needZ - 1) + wb * Math.min(0, fb / needB - 1));
+        v += fireMul * o.kFire * (wz * u(fz / needZ) + wb * u(fb / needB));
+        v += fireMul * o.kShort * (wz * Math.min(0, fz / needZ - 1) + wb * Math.min(0, fb / needB - 1));
         return v;
       };
 
@@ -316,10 +433,42 @@ RD.defineAgent('scopecombo_paradise', {
       const phiNow = phi(base0, n0);            // mag が決まった後に計算し直す
 
       // 出目1のコンボ同士の合成は、出目1の適応があれば必ずコンボ＋適応に変える
+      // 盤面に残っている最後のスコープとコンボの隣接をなくす合成は禁止（合成でできる種類は抽選なので、合成先は「どちらでもない」とみる）
+      const adjPairs = b => {
+        let n = 0;
+        for (let i = 0; i < 15; i++) {
+          const d = b[i]; if (!d || d.type !== 'scope' || d.sealed) continue;
+          for (const j of nb[i]) if (b[j] && b[j].type === 'combo' && !b[j].sealed) n++;
+        }
+        return n;
+      };
+      const adjNow = adjPairs(obs.board);
+      const adj0 = o.keepLastAdj ? adjNow : 0;
+      const killsLastAdj = a => {
+        if (!adj0 || a.result !== 'merge') return false;
+        const b = obs.board.slice(); b[a.from] = null; b[a.to] = { type: '?', pips: 0 };
+        return adjPairs(b) === 0;
+      };
+      // 最後の隣接をなくす手：総数 W が adjBanW を超えていれば禁止、それ以下はためらう（減点）
+      //   減点＝kAdjKill × (W/adjBanW) × (1 + adjCapW/(1 + 隣接可能マス数))
+      //   隣接可能マス＝操作後の盤面で、スコープの上下左右のマス（盤面の外は数えない）のうち、コンボ以外の出目7がいないマス（重複は1つ）
+      const adjBan = W0 > o.adjBanW;
+      const capCells = b => {
+        const set = new Set();
+        for (let i = 0; i < 15; i++) {
+          const d = b[i]; if (!d || d.type !== 'scope' || d.sealed) continue;
+          for (const j of nb[i]) { const e = b[j]; if (!(e && e.pips === 7 && e.type !== 'combo')) set.add(j); }
+        }
+        return set.size;
+      };
+      const adjKillPen = a => {
+        const b = obs.board.slice(); b[a.from] = null; b[a.to] = { type: '?', pips: obs.board[a.to].pips + 1 };
+        return o.kAdjKill * Math.min(1, W0 / o.adjBanW) * (1 + o.adjCapW / (1 + capCells(b)));
+      };
       const toAdaptive = a => {
         const X = obs.board[a.from], Y = obs.board[a.to];
         if (a.result !== 'merge' || X.type !== 'combo' || Y.type !== 'combo' || X.pips !== 1 || !o.combo1UseAdaptive) return a;
-        const alt = obs.legal.acts.filter(q => q.result === 'merge' && obs.board[q.from].pips === 1 && !early.has(q.from) && !early.has(q.to)
+        const alt = obs.legal.acts.filter(q => q.result === 'merge' && obs.board[q.from].pips === 1 && !early.has(q.from) && !early.has(q.to) && !(adjBan && killsLastAdj(q))
           && ((obs.board[q.from].type === 'adaptive' && obs.board[q.to].type === 'combo') || (obs.board[q.from].type === 'combo' && obs.board[q.to].type === 'adaptive')));
         if (!alt.length) return a;
         // 同じコンボを使い、合成先が元の合成先（なければ楽園マス以外）になるものを優先
@@ -332,7 +481,7 @@ RD.defineAgent('scopecombo_paradise', {
       // 2W までのレオン前：出目1コンボを使う合成を、召喚より先に必ず打つ
       const leonForce = leonPre && obs.wave <= o.leonForceToWave;
       if (leonForce && !ctl.dragging && !(ctl.actReadyIn > 0)) {
-        const f = obs.legal.acts.filter(a => a.result === 'merge' && obs.board[a.from].pips === 1
+        const f = obs.legal.acts.filter(a => a.result === 'merge' && obs.board[a.from].pips === 1 && !(adjBan && killsLastAdj(a))
           && (obs.board[a.from].type === 'combo' || obs.board[a.to].type === 'combo') && !early.has(a.from) && !early.has(a.to));
         if (f.length) {
           // コンボ同士 → コンボ＋適応 → そのほか の順。合成先は楽園マス以外を優先
@@ -352,7 +501,18 @@ RD.defineAgent('scopecombo_paradise', {
       const okKeys = obs.wave >= o.fullOnlyFromWave ? o.notFullKeys : o.notFullKeysEarly;
       const limited = !full;
       const pendCells = new Set(pend.flatMap(q => q.cells));
+      // 1回目：最後の隣接をなくす手は行わない。
+      // 盤面が埋まっていて、最後の隣接をなくす手しか残っていない（詰み）とき、2回目：
+      //   ナイト・レオン前（次のボスがナイト・レオンの通常ウェーブ）で残り unlockLeft 秒以下 → 禁止を外して最も良い手
+      //   それ以外 → ジョーカーのコピーで、スコープとコンボの新しい隣接を作る手だけ（なければ何もしない）
+      const unlockTime = obs.phase === 'wave' && (nextType === 'knight' || nextType === 'leon') && tl <= o.unlockLeft;
+      for (let pass = 0; pass < 2 && !best; pass++) {
+      const stuckPass = pass === 1;
+      if (stuckPass && !(full && adj0 && adjBan && acts.some(killsLastAdj))) break;
+      const unlock = stuckPass && unlockTime, buildOnly = stuckPass && !unlockTime;
       for (const a of acts) {
+        const kills = killsLastAdj(a);
+        if (kills && adjBan && !unlock) continue; // 総数が adjBanW を超えていれば、最後の隣接をなくす手は行わない
         if (early.has(a.from) || early.has(a.to)) continue;
         const x = cur[a.from], y = cur[a.to];
         if (!x || !y) continue;
@@ -361,12 +521,21 @@ RD.defineAgent('scopecombo_paradise', {
         if (magNow && o.magNoEscape && a.result === 'merge' && pendCells.has(a.from) && !pendCells.has(a.to)
           && acts.some(q => q.from === a.to && q.to === a.from)) continue; // マジシャン戦：メテオから逃がさず、予告マスへ合成する
         const isMerge = a.result === 'merge';
+        // 詰んだときの2回目（buildOnly）：ジョーカーでスコープ・コンボをコピーして、隣接の組が増える手だけ
+        let adjGain = 0;
+        if (buildOnly) {
+          if (isMerge || !(y.type === 'scope' || y.type === 'combo')) continue;
+          const b2 = obs.board.slice(); b2[a.from] = { type: y.type, pips: x.pips, sealed: false };
+          adjGain = adjPairs(b2) - adjNow;
+          if (adjGain <= 0) continue;
+        }
         const lowPair = magPre && isMerge && x.pips <= o.magLowPips;                       // マジシャン前：低い出目同士
         const combo1 = leonStop && isMerge && x.pips === 1 && (x.type === 'combo' || y.type === 'combo'); // レオン前：出目1コンボ
         const outCrit = critOut && isMerge && critCell[a.from] != null && critCell[a.to] == null && x.type === 'combo'; // 楽園マスのコンボを外へ
-        if (limited && !pendCells.has(a.from) && !pendCells.has(a.to) && !x.hacked && !y.hacked && !lowPair && !combo1 && !outCrit
+        if (limited && !pendCells.has(a.from) && !pendCells.has(a.to) && !x.hacked && !y.hacked && !lowPair && !combo1 && !outCrit && adjGain <= 0
           && !(okKeys || []).includes(a.result === 'copy' ? 'joker>' + y.type : pairKey(x.type, y.type))) continue;
         let bonus = 0;
+        if (kills && !adjBan) bonus -= adjKillPen(a); // 総数 adjBanW 以下では、最後の隣接をなくす手をためらう
         if (combo1) bonus += o.kLeon1;
         if (outCrit) bonus += o.kCritOut;
         // 出目1のジョーカーは、コンボのコピー以外に使う手を下げる
@@ -397,7 +566,8 @@ RD.defineAgent('scopecombo_paradise', {
           ev /= deckTypes.length;
         }
         const S = ((o.eff && o.eff[key]) || 0) - o.lowFirst * x.pips + ev - phiNow + bonus;
-        if (!best || S > best.S) best = { a, S, key };
+        if (!best || S > best.S) best = { a, S, key: unlock ? key + '（隣接の禁止を外す）' : adjGain > 0 ? key + '（新しい隣接）' : key };
+      }
       }
       if (!best) return null;
       if (!full && !(best.S > o.minScoreNotFull)) return null;

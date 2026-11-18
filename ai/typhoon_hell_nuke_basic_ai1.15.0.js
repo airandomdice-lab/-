@@ -1,4 +1,4 @@
-// 台風地獄核基本AI 1.13（AI API v1／AI_AGENT_GUIDE 1.7.x・AIRandomDicesim 2.3.0〜2.5.3 用）
+// 台風地獄核基本AI 1.15.0（AI API v1／AI_AGENT_GUIDE 1.7.x〜1.13.x・AIRandomDicesim 2.3.0〜4.3.5 用）
 // 登録ID：typhoon_hell_nuke_basic（ほかのAIと同時に読み込めるよう、IDを分けている）
 // 想定デッキ：台風・地獄・核・適応・ジョーカー　想定スキン：五番目の航海日記　想定する本家バージョン：6.5.0
 // 方針：台風×地獄の即死で雑魚を処理し、中ボス・ボスは核で倒す。
@@ -18,6 +18,19 @@
 //       1.11　バジリスク（スライム）前の詰み回避は核が6個を超えたらやめる。20W以降のマジシャンはすぐボス核攻撃に戻す（スキル待ちはレオンだけ）
 //       1.12　4〜10Wの最初のスライムのボス戦は何もしない（核攻撃・合成・召喚・PUすべて）。その後（またはW11以降）のスライム前は核8個まで詰み回避
 //       1.13　スライム放置の条件を「即時に撃てる核の出目の合計が10以下」に（試合で1回だけ）。スライム前の詰み回避はその合計10を目指す
+//       1.14　盤面の地獄が1個だけなら、その地獄は合成に使わない（2角を超えた敵がいて、撃てる核がないときだけ使ってよい）
+//       1.15.0　暗殺対面（相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがすべてある）を追加。ファイル全体を (() => { … })(); で包んだ
+//
+// 暗殺対面（1.15.0。asnMode）：通常の動きは使わない。操作速度・判断速度を0.1秒に（判断の間隔・重ねる操作の間隔・召喚の間隔・ドラッグ時間。asnSpeed）
+//   1. 暗殺が飛んできたとき（着弾の早い順。ドラッグが着弾までに終わらないときはしない。ほかの暗殺の予告マスへは合成しない）
+//      ジョーカー：同じ出目の 台風 → 核 → 適応 → 地獄 の順にコピーして避ける
+//      出目1の台風：懸賞金の付いていない出目1の適応へ合成して避ける（出目2以上の台風は避けない）
+//      地獄：懸賞金の付いていない同じ出目の地獄へ合成して避ける
+//      核：懸賞金の付いていない同じ出目の 核 → 適応 の順に合成して避ける
+//      適応：懸賞金の付いていない同じ出目の 核 → 地獄 → 台風（台風が5個以上のときだけ）の順に合成して避ける
+//   2. 盤面のダイスが7個を超え、台風が2個以上なら、台風をLv2にPU（召喚より先）
+//   3. 召喚
+//   4. 台風が2個以下で、ジョーカーが4個以上なら、ジョーカーで台風を1個コピー
 //
 // 用語
 //   1角・2角：通路の曲がり角。通路の入口からの距離 pos が 3.5（1角）・8.5（2角）の位置
@@ -42,6 +55,7 @@
 //   4) 3W以降：通常行動
 //   5) 3W以降で、このウェーブのボスがバジリスク（スライム）：詰み回避のうちペアに触らない部分（通常行動〜ジョーカー同士）まで進める（バジリスク前は核が6個を超えたらやめる。スライム前は即時に撃てる核の出目の合計が10になるまで）
 //   詰み回避は、通常核攻撃・ボス核攻撃ができなかったときだけ行う
+//   ※盤面の地獄が1個だけなら、その地獄はどの合成にも使わない。例外は、2角を超えた敵がいて撃てる核（核＋適応・核同士）がないとき（1.14）
 //
 // 通常核攻撃（上から）
 //   ジョーカーでコピーできる核をコピー
@@ -62,10 +76,29 @@
 //   → （追加・options.extraStuck）盤面が埋まっていれば 適応同士 → 小さい出目から核を撃つ
 // PUの目標（ウェーブに達したら、上から順に）
 //   1W：盤面に台風が出たら 台風Lv2　2W：台風Lv3　3W：地獄Lv3・核Lv2　4W：地獄Lv5　5W：核Lv3　6W：核Lv4　7W：核Lv5
+(() => {
+'use strict';
+
+// 暗殺対面の判定：相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがすべて入っている
+const THN_ASN_DECK = ['bounty', 'assassin', 'sacrifice', 'adaptive', 'joker'];
+function thnIsAsn(info) {
+  const od = info && info.opponentDeck; if (!od) return false;
+  const ts = new Set(od.map(d => d.type));
+  return THN_ASN_DECK.every(t => ts.has(t));
+}
+
 RD.defineAgent('typhoon_hell_nuke_basic', {
   name: '台風地獄核基本AI',
-  desc: '台風・地獄・核・適応・ジョーカー用（航海日記・6.5.0想定）。1Wのボスがレオンなら台風が3個になったら召喚を止め、咆哮後に再開。1〜2Wはジョーカーで台風をコピー。台風×地獄の即死で雑魚を処理し、2角を超えた敵（ボスを含む）・3W以降の1角以降の中ボスには通常核攻撃（出目1核を残しつつ低い出目から）。3W以降と2Wのレオンのボス戦は、HP8割以上なら最高出目の核→残りHPを削りきれる核→なければ通常核攻撃。3W以降はジョーカーで核をコピー→同じ出目の台風同士・地獄同士を合成（最高効率即死ペアは残す）→核を合成できない状態なら詰み回避の行動。核攻撃ができないときは詰み回避。20W以降のレオンはスキルを受けてからボス核攻撃。3W以降のバジリスク前のウェーブは詰み回避（ペアに触らない部分）まで進める（バジリスク前は核6個まで、スライム前は即時に撃てる核の出目の合計10まで）。スライムのボス戦開始時に即時に撃てる核の出目の合計が10以下なら、そのボス戦は何もしない（試合で1回だけ）。最高効率即死ペアの制限は、台風×地獄が9を超える隣接ペアが残るなら外す。',
+  desc: '台風・地獄・核・適応・ジョーカー用（航海日記・6.5.0想定）。1Wのボスがレオンなら台風が3個になったら召喚を止め、咆哮後に再開。1〜2Wはジョーカーで台風をコピー。台風×地獄の即死で雑魚を処理し、2角を超えた敵（ボスを含む）・3W以降の1角以降の中ボスには通常核攻撃（出目1核を残しつつ低い出目から）。3W以降と2Wのレオンのボス戦は、HP8割以上なら最高出目の核→残りHPを削りきれる核→なければ通常核攻撃。3W以降はジョーカーで核をコピー→同じ出目の台風同士・地獄同士を合成（最高効率即死ペアは残す）→核を合成できない状態なら詰み回避の行動。核攻撃ができないときは詰み回避。20W以降のレオンはスキルを受けてからボス核攻撃。3W以降のバジリスク前のウェーブは詰み回避（ペアに触らない部分）まで進める（バジリスク前は核6個まで、スライム前は即時に撃てる核の出目の合計10まで）。スライムのボス戦開始時に即時に撃てる核の出目の合計が10以下なら、そのボス戦は何もしない（試合で1回だけ）。最高効率即死ペアの制限は、台風×地獄が9を超える隣接ペアが残るなら外す。盤面の地獄が1個だけなら、2角を超えた敵がいて撃てる核がないとき以外は、その地獄を合成に使わない。暗殺対面（相手に懸賞金・暗殺・生贄・適応・ジョーカー）は速度0.1秒で、暗殺避け（ジョーカーは台風→核→適応→地獄をコピー、出目1台風は適応へ、地獄は地獄へ、核は核→適応へ、適応は核→地獄→台風〔台風5個以上〕へ。合成先は懸賞金なし）→盤面7個超・台風2個以上で台風Lv2→召喚→台風2個以下・ジョーカー4個以上ならジョーカーで台風をコピー。',
+  // 暗殺対面では操作速度・判断速度を asnSpeed 秒に（それ以外はシミュレータの設定のまま）
+  limits: (o, info) => (o.asnMode && o.asnSpeed && thnIsAsn(info)) ? { interval: o.asnSpeed, actInterval: o.asnSpeed, summonInterval: o.asnSpeed, dragTime: o.asnSpeed } : null,
   options: {
+    asnMode: true,          // 暗殺対面の動きにする（相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカー）
+    asnSpeed: 0.1,          // 暗殺対面の操作速度・判断速度（秒）
+    asnTyphoonLv2Dice: 7,   // 暗殺対面：盤面のダイスがこの数を超え、台風が2個以上なら台風Lv2
+    asnCopyTyphoonMax: 2,   // 暗殺対面：台風がこの数以下で、ジョーカーが asnCopyJokers 個以上なら、ジョーカーで台風をコピー
+    asnCopyJokers: 4,
+    asnAdaptTyphoonMin: 5,  // 暗殺対面：適応に暗殺が来たとき、台風へ合成して避けるのは台風がこの数以上のときだけ
     nukeHold: 2.5,          // 核の合成を受け付けてから、次の通常核攻撃をしない秒（ドラッグ1秒＋弾が飛ぶ時間）
     midFromWave: 3,         // 1角以降の中ボスに通常核攻撃をするウェーブ
     bossNukeFromWave: 3,    // ボス核攻撃をするウェーブ（これより前は bossNukeEarly のボスだけ）
@@ -97,7 +130,8 @@ RD.defineAgent('typhoon_hell_nuke_basic', {
     const nukePct = nukeInfo ? 0.20 + 0.02 * (nukeInfo.cls - 7) : 0.2; // ボス・小ボスへの割合（出目1あたり）
     const isBossTarget = e => e && e.bossLike && e.kind !== 'mid';     // ボス核攻撃の対象（ボス・小ボス・今後の分裂体など）
 
-    return { decide(obs) {
+    const ASN = !!(o.asnMode && thnIsAsn(ctx.info));   // 暗殺対面
+    const normalDecide = function (obs) {
       if (obs.call > 0 && obs.results.some(r => r.reason === 'limit')) return null;
       const b = obs.board, ctl = obs.control || {}, W = obs.wave;
       let mem; try { mem = JSON.parse(obs.memory || '{}'); } catch (e) { mem = {}; }
@@ -166,6 +200,12 @@ RD.defineAgent('typhoon_hell_nuke_basic', {
         for (const ti of cells('typhoon')) { if (R.has(ti)) continue; for (const hi of NB[ti]) if (!R.has(hi) && is(hi, 'hell') && b[ti].pips * b[hi].pips > o.pairFreeTH) return true; }
         return false; };
       const okTouch = (remove, touch) => pairLeft(remove) || !touch.some(i => prot.has(i));
+      // 最後の1個の地獄（1.14）：2角を超えた敵がいて撃てる核がないとき以外は、合成に使わない
+      const hells = cells('hell');
+      const anyNukePair = () => { for (let p = 1; p <= 6; p++) if (withAdaptive(p) || withNuke(p)) return true; return false; };
+      let loneHellC; // 判断ごとに1回だけ計算（核の合成の関数は下で定義するので、呼ばれた時点で計算する）
+      const loneHell = () => loneHellC !== undefined ? loneHellC
+        : (loneHellC = hells.length === 1 && !(obs.enemies.some(e => e.pos > o.corner2) && !anyNukePair()) ? hells[0] : -1);
       // 合成先：台風・地獄に多く隣接しているマス（新しいダイスが台風・地獄ならそのまま効く）
       const near = i => NB[i].filter(j => is(j, 'typhoon') || is(j, 'hell')).length;
       const mergeOf = (x, y) => { // x と y の合成（どちら向きでも）。合成先は near の大きいほう
@@ -241,9 +281,9 @@ RD.defineAgent('typhoon_hell_nuke_basic', {
         return null;
       }
       const byPipsDesc = L => L.slice().sort((p, q) => b[q].pips - b[p].pips || p - q);
-      const withAdaptiveOf = (L, label) => { for (const x of byPipsDesc(L)) for (const a of cells('adaptive')) { if (b[a].pips !== b[x].pips) continue; const m = mergeOf(x, a); if (m) return { m, note: `${label}（出目${b[x].pips}、${m.from}→${m.to}）` }; } return null; };
+      const withAdaptiveOf = (L, label) => { for (const x of byPipsDesc(L)) for (const a of cells('adaptive')) { if (b[a].pips !== b[x].pips || x === loneHell()) continue; const m = mergeOf(x, a); if (m) return { m, note: `${label}（出目${b[x].pips}、${m.from}→${m.to}）` }; } return null; };
       // 適応との合成（ペアの制限つき）
-      const withAdaptiveG = (L, label) => { for (const x of byPipsDesc(L)) for (const a of cells('adaptive')) { if (b[a].pips !== b[x].pips || !okTouch([x, a], [x])) continue; const m = mergeOf(x, a); if (m) return { m, note: `${label}（出目${b[x].pips}、${m.from}→${m.to}）` }; } return null; };
+      const withAdaptiveG = (L, label) => { for (const x of byPipsDesc(L)) for (const a of cells('adaptive')) { if (b[a].pips !== b[x].pips || x === loneHell() || !okTouch([x, a], [x])) continue; const m = mergeOf(x, a); if (m) return { m, note: `${label}（出目${b[x].pips}、${m.from}→${m.to}）` }; } return null; };
       const jokerCopyG = (L, name) => { for (const x of byPipsDesc(L)) for (const j of cells('joker')) { if (!okTouch([j], [x])) continue; const a = find(j, x, 'copy'); if (a) return { m: a, note: `ジョーカー${j}で${name}（出目${b[x].pips}）をコピー` }; } return null; };
       function stuck(why, skipNormal, safeOnly) {
         const pre = why ? why + '／' : '詰み回避：';
@@ -314,6 +354,69 @@ RD.defineAgent('typhoon_hell_nuke_basic', {
         if (s3 && s3.ops && s3.ops.length) return s3;
       }
       return out({ ops: [], note: null });
-    } };
+    };
+
+    // ---------- 暗殺対面（1.15.0） ----------
+    const NAME = { typhoon: '台風', hell: '地獄', nuke: '核', adaptive: '適応', joker: 'ジョーカー' };
+    const nm = t => NAME[t] || t;
+    const asnDone = new Map();   // 避けた暗殺（予告のキー → 避けたときの対象のダイスID）
+    const asnDecide = (obs) => {
+      if (obs.over) return null;
+      if (obs.call > 0 && obs.results.some(r => r.reason === 'limit')) return null;
+      const b = obs.board, ctl = obs.control || {};
+      const is = (i, t) => !!(b[i] && b[i].type === t);
+      const cells = t => [...Array(15).keys()].filter(i => is(i, t) && !b[i].sealed);
+      const legal = new Map(obs.legal.acts.map(a => [a.from * 15 + a.to, a]));
+      const find = (f, t, res) => { const a = legal.get(f * 15 + t); return a && a.result === res ? a : null; };
+      const actReady = !ctl.dragging && !(ctl.actReadyIn > 1e-9);
+      const act = (a, note) => ({ ops: [{ op: 'act', from: a.from, to: a.to, fromId: b[a.from].id, toId: b[a.to].id, expect: a.result }], more: true, note });
+      const dt = ctl.dragTime || 0;
+      const noBounty = i => !(b[i].bounty > 0);
+      // 1. 暗殺が飛んできた
+      const pend = (obs.pending || []).filter(p => p.kind === 'assassin' && p.cells && p.cells.length).sort((x, y) => x.in - y.in);
+      const pendCells = new Set(pend.flatMap(p => p.cells));
+      if (actReady) for (const p of pend) {
+        const cell = p.cells[0], d = b[cell];
+        if (!d || d.sealed || p.in <= dt + 0.02) continue;
+        const key = cell + ':' + Math.round((obs.t + p.in) * 10);
+        if (asnDone.has(key) && asnDone.get(key) !== d.id) continue;   // もう避けた（対象のダイスが変わった）
+        const safe = i => i !== cell && !pendCells.has(i);
+        // 懸賞金の付いていない同じ出目の t（ほかの暗殺の予告マスは除く）へ合成して逃がす
+        const mergeTo = t => cells(t).filter(x => safe(x) && b[x].pips === d.pips && noBounty(x)).map(x => find(cell, x, 'merge')).filter(Boolean)[0];
+        let r = null;
+        if (d.type === 'joker') {
+          for (const t of ['typhoon', 'nuke', 'adaptive', 'hell']) {
+            const c = cells(t).filter(x => x !== cell).map(x => find(cell, x, 'copy')).filter(Boolean)[0];
+            if (c) { r = act(c, `暗殺対面：ジョーカー${d.pips}に暗殺。${nm(t)}をコピーして避ける`); break; }
+          }
+        } else if (d.type === 'typhoon') {
+          if (d.pips === 1) { const c = mergeTo('adaptive'); if (c) r = act(c, `暗殺対面：出目1の台風に暗殺。懸賞金のない適応（${c.to}）へ合成して避ける`); }
+        } else if (d.type === 'hell') {
+          const c = mergeTo('hell'); if (c) r = act(c, `暗殺対面：地獄${d.pips}に暗殺。懸賞金のない地獄（${c.to}）へ合成して避ける`);
+        } else if (d.type === 'nuke') {
+          for (const t of ['nuke', 'adaptive']) { const c = mergeTo(t); if (c) { r = act(c, `暗殺対面：核${d.pips}に暗殺。懸賞金のない${nm(t)}（${c.to}）へ合成して避ける`); break; } }
+        } else if (d.type === 'adaptive') {
+          const ts = ['nuke', 'hell'];
+          if (cells('typhoon').length >= o.asnAdaptTyphoonMin) ts.push('typhoon');
+          for (const t of ts) { const c = mergeTo(t); if (c) { r = act(c, `暗殺対面：適応${d.pips}に暗殺。懸賞金のない${nm(t)}（${c.to}）へ合成して避ける`); break; } }
+        }
+        if (r) { asnDone.set(key, d.id); return r; }
+      }
+      // 2. 盤面のダイスが7個を超え、台風が2個以上なら台風Lv2（召喚より先）
+      const lvT = (obs.deck.find(x => x.type === 'typhoon') || {}).lv || 99;
+      const nDice = b.filter(Boolean).length, nTy = cells('typhoon').length;
+      if (nDice > o.asnTyphoonLv2Dice && nTy >= 2 && lvT < 2 && obs.legal.powerUp.includes('typhoon'))
+        return { ops: [{ op: 'powerUp', type: 'typhoon' }], more: true, note: `暗殺対面：盤面のダイス${nDice}個・台風${nTy}個なので台風Lv2` };
+      // 3. 召喚
+      if (obs.legal.summon && !(ctl.summonReadyIn > 1e-9)) return { ops: [{ op: 'summon' }], more: true, note: '暗殺対面：召喚' };
+      // 4. 台風が2個以下で、ジョーカーが4個以上なら、ジョーカーで台風を1個コピー
+      if (actReady && nTy <= o.asnCopyTyphoonMax && cells('joker').length >= o.asnCopyJokers) {
+        for (const j of cells('joker')) { if (pendCells.has(j)) continue; for (const t of cells('typhoon')) { const a = find(j, t, 'copy'); if (a) return act(a, `暗殺対面：台風${nTy}個・ジョーカー${cells('joker').length}個なので、ジョーカー${j}で台風${b[t].pips}をコピー`); } }
+      }
+      return null;
+    };
+
+    return { decide: obs => (ASN ? asnDecide(obs) : normalDecide(obs)) };
   },
 });
+})();

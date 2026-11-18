@@ -52,11 +52,47 @@
 //   ・W1〜W2のSPに余裕がない放置中、太陽が活性していなければ、合成だけで太陽をそろえる
 //     （3個以下は自由枠どうし・月どうし、5個以上は太陽どうし。召喚しない）（w12SpFix）
 //   ・すべての場面で、太陽に隣接している月に出目3以上がなければ月の活性は求めない（moonAdjMin）
+// 2026-11-14 改訂
+//   ・活性しているかは、エンジンが渡す活性状態（盤面の active）で判断する。活性になる個数もエンジンの activeCounts を使う（月の裏などにも対応）。
+//     ただしW3以降の太陽1個は、これまでどおり活性に数えない（sunOneActive: false）
+//   ・ナイトを受けるときは、スキルの前ではなくボス出現の演出中（phase 'intro'）に活性を切る。演出がない設定のときだけ、従来どおりスキルの前に切る
+//   ・出目3以上のジョーカーで成長をコピーする（highJokerGrowth 4→3。月の星がないとき）
+//   ・守るダイスの活性用のジョーカー（調整用）も、先頭がレーンの真ん中を越えていなければ、出目3以上の成長があればコピーを優先する（reservedGrowth）
+//   ・W5以降は、押し返したら火力に関係なく出目上げを再開する（詰むまで）（alwaysBuildWave）
+//   ・出目上げの手の順：隣接づくり → 同じ出目の「守るダイスと太陽」以外のダイスどうしを合成 → 召喚 → 成長のコピー →
+//     評価が上がる合成・コピー → ジョーカーで組を作って合成（守りでない月を優先）
+//   ・PU：月・太陽をLv5まで上げるのは、出目4以上の月に出目2以上の太陽が隣接し、太陽も月も活性しているときだけ
+//   ・W1：先頭がレーンの真ん中を越えていたら、出目1の月どうしは合成する
+//   ・合成の向き（向きに目的があるとき＝隣接づくり以外）：真ん中の列の中央3マス → 4隅以外 → 4隅。同じなら左、次に上
+// 2026-11-17 改訂：暗殺対面（相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカー）。動きは通常とまったく別（asnMode）
+//   ・操作速度・判断速度を0.1秒に（判断の間隔・重ねる操作の間隔・召喚の間隔・ドラッグ時間）（asnSpeed）
+//   ・太陽が活性していれば止める。活性していなければ召喚して活性を狙う
+//   ・召喚できず太陽が活性していないとき：相手の盤面に暗殺がなければ、懸賞金の付いていないジョーカーで太陽をコピー →
+//     それでも活性しなければ、懸賞金の付いていない（ジョーカー・成長以外の）ダイスどうしを合成。それでも無理なら止まる
+//   ・こちらの先頭のモンスターが2つ目の角を越えたら、懸賞金の縛りを外して活性を試みる（相手の暗殺の有無も見ない）。
+//     それでも無理なら、ジョーカーでほかのダイスをコピーして合成。それでも無理ならジョーカーどうしを合成
+//   ・暗殺が飛んできたとき
+//     ジョーカー：太陽が2・3個なら太陽をコピー。1・4個なら月以外をコピー（4個のときは太陽も避ける）
+//     太陽：何もしない
+//     ほかのダイス：先頭が2つ目の角の手前なら、召喚2回分のSPがあるか、盤面の太陽と同じ出目のジョーカーがあれば、
+//       懸賞金の付いていない同じ種類のダイスへ合成して避ける。2つ目の角を越えていて太陽が活性していれば何もしない。
+//       2つ目の角を越えていて太陽が活性していなければ、懸賞金の縛りなしで同じ種類のダイスへ合成して避ける
+// 2026-11-17 改訂：出目7（星）のジョーカーは、太陽か月以外をコピーしない（すべての場面）
 'use strict';
+
+// 暗殺対面の判定：相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがすべて入っている
+const MS_ASN_DECK = ['bounty', 'assassin', 'sacrifice', 'adaptive', 'joker'];
+function msIsAsn(info) {
+  const od = info && info.opponentDeck; if (!od) return false;
+  const ts = new Set(od.map(d => d.type));
+  return MS_ASN_DECK.every(t => ts.has(t));
+}
 
 RD.defineAgent('moonsun', {
   name: '月太陽',
   desc: '月太陽の組み立て手順に沿うルールベースAI（たたき台）',
+  // 暗殺対面では操作速度・判断速度を asnSpeed 秒に
+  limits: (o, info) => (o.asnMode && o.asnSpeed && msIsAsn(info)) ? { interval: o.asnSpeed, actInterval: o.asnSpeed, summonInterval: o.asnSpeed, dragTime: o.asnSpeed } : null,
   options: {
     prepLine: 6.0,      // 活性準備に入る先頭の雑魚の位置（レーンの真ん中＝全長12の半分）。W3以降
     earlyLine: 8.5,     // W1〜W2の活性準備（太陽4つにする）位置＝2つ目の角
@@ -101,7 +137,7 @@ RD.defineAgent('moonsun', {
     startOnce: false,     // true＝召喚startSummons回分のSPで出目上げを始めるのは試合で最初の1回だけ（false＝ウェーブごとに10回分を待つ）
     summonHyst: true,     // 出目上げの召喚：召喚startSummons回分たまったら、keepSummons回分まで続けて使う。使い切ったら、またstartSummons回分たまるまで召喚しない（ポツポツ出しを防ぐ）
     over7: false,         // 太陽が8個以上なら7個に戻すのも立て直しの目標にする
-    highJokerGrowth: 4,   // 月の星がなければ、危ない場面以外はいつでも、この出目以上のジョーカーで成長をコピーする（0で切る）
+    highJokerGrowth: 3,   // 月の星がなければ、危ない場面以外はいつでも、この出目以上のジョーカーで成長をコピーする（0で切る）
     sunWaitFix: true,     // SPを貯めていて動かさないとき、太陽が活性していなければ太陽どうしの合成（5個以上）・出目1・2のジョーカーで太陽をコピー
     knightRules: true,    // ナイトの変換後：1回目は合成の禁止つきでユーザーの手順（月の星が出ていれば何としてでも）。2回目でライフ3なら合成の禁止つき
     pairMaxUrg: 1,        // 上を urgency がこの値以下のときだけにする（0＝先頭がレーンの真ん中の1.5手前まで）
@@ -114,16 +150,35 @@ RD.defineAgent('moonsun', {
     w12GrowthAlways: true,  // W1〜W2：いかなるときも、先頭が2つ目の角を越えるまでは、ジョーカーで成長をコピーできれば全部コピーする（守りのジョーカーも）
     w12SpFix: true,         // W1〜W2のSPに余裕がない放置中：太陽が活性（1・4・7個）していなければ、3個以下は自由枠・月どうし、5個以上は太陽どうしを合成（召喚しない）
     moonAdjMin: 3,          // 太陽に隣接している月の中にこの出目以上がなければ、月の活性は求めない（0で切る）
+    // ---- 2026-11-14 追加 ----
+    sunOneActive: false,    // 太陽1個の活性も活性に数える（false＝W3以降の判断では数えない）
+    reservedGrowth: 3,      // 調整用ジョーカーも、先頭がレーンの真ん中の手前なら、この出目以上の成長をコピーする（0で切る）
+    alwaysBuildWave: 5,     // このウェーブ以降は、押し返したら火力に関係なく出目上げを再開する（0で切る＝火力の判定を使う）
+    freeMerge: true,        // 出目上げ：召喚より先に、同じ出目の「守るダイスと太陽」以外のダイスどうしを合成
+    pairPreferMoon: true,   // 出目上げのジョーカーの組づくり：守りでない月を優先してコピーする
+    puAdjSun: 2,            // 月・太陽をLv5まで上げる条件：出目4以上の月に、この出目以上の太陽が隣接し、両活性していること（0で条件なし）
+    w1MoonMerge: true,      // W1：先頭がレーンの真ん中を越えていたら、出目1の月どうしを合成
+    mergeDir: true,         // 合成の向き：真ん中の列の中央3マス → 4隅以外 → 4隅（同じなら左、次に上）
+    // ---- 2026-11-17 追加（暗殺対面） ----
+    asnMode: true,          // 相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがあれば、暗殺対面の動きにする
+    asnSpeed: 0.1,          // 暗殺対面の操作速度・判断速度（秒）
+    asnCorner: 8.5,         // 暗殺対面：こちらの先頭のモンスターがこの位置（2つ目の角）を越えたら縛りを外す
+    asnSunOneEarly: false,  // 暗殺対面：W1〜W2は太陽1個の活性も活性に数える（false＝数えない。試験で悪化したので切ってある）
+    asnPu: false,           // 暗殺対面：太陽が活性して止めている間にPUする
   },
 
   create(ctx) {
     const O = ctx.options;
     const NB = ctx.info.board.neighbors;
+    const ASN = !!(O.asnMode && msIsAsn(ctx.info));   // 暗殺対面
     const INFO = {};
     for (const d of ctx.info.deck) INFO[d.type] = d;
     const DECK = ctx.info.deck.map(d => d.type);
     const CD = (ctx.info.cfg && ctx.info.cfg.cd) || 1600;
-    const SUN_OK = [4, 7];   // 太陽の活性（1個の活性は弱いので数えない）
+    // 活性になる個数：エンジンの activeCounts（月の裏などの特性も反映済み）
+    const AC = t => (INFO[t] && Array.isArray(INFO[t].activeCounts) && INFO[t].activeCounts.length ? INFO[t].activeCounts.slice() : null);
+    const SUN_ALL = AC('sun') || [1, 4, 7];
+    const SUN_OK = SUN_ALL.filter(n => O.sunOneActive || n !== 1);   // 太陽の活性（1個の活性は弱いので数えない）
     // 立て直しの目標：基本は4個。7個を目指すのは、先頭の雑魚が2つ目の角を越えていて、7個のほうが手数が少ないときだけ
     let sunTargets = [4];
     let over7Now = false;   // 動かさない判断の前の立て直しだけ：太陽8個以上は7個に戻すのも目標
@@ -137,7 +192,7 @@ RD.defineAgent('moonsun', {
     const isGrowthPair = (b, a) => !!(b[a.from] && b[a.from].type === 'growth' && b[a.to] && b[a.to].type === 'growth');
     // 立て直しでの成長どうしの合成：立て直しはいつでもよい。活性の手順（activation）は2つ目の角を越えてから
     const growthOkInRepair = activation => !activation || leadPos >= O.growthMergeLine;
-    const MOON_OK = [3, 5, 7];
+    const MOON_OK = AC('moon') || [3, 5, 7];
 
     // HP表（仕様書の式。エンジンの RD.tableHP と同じ）
     const waveT = w => Math.max(100 - 10 * w, 60), waveDt = w => Math.max(12 - 2 * w, 2);
@@ -160,6 +215,9 @@ RD.defineAgent('moonsun', {
       spending: false,     // 召喚10回分たまって、5回分まで使っている途中（summonHyst）
       pair: null,          // ジョーカーで作った合成の組（ダイスID）。次の判断で合成する
       fixPair: null,       // 立て直しの手がないときにジョーカーで作った組（次の判断で合成する）
+      introWave: 0,        // ボス出現の演出があったウェーブ
+      knightPlanWave: 0, knightPlan: null, // 演出中に決めた「ナイトを受けるか」
+      asnDone: new Map(),  // 暗殺対面：避けた暗殺（予告のキー → 避けたときの対象のダイスID）
       weakWave: 0,         // このウェーブは火力不足と判定して作り込みを再開した
       judgedAt: -1,        // 火力を判定した時刻（同じ押し返しで何度も判定しない）
       // 火力の実測：活性して止めている間に、敵のHPがどれだけ減ったか
@@ -212,7 +270,7 @@ RD.defineAgent('moonsun', {
     }
     // 太陽1つの火力（horizon秒撃ち続けたときの累積ダメージの目安）
     function sunPower(obs, d, b) {
-      const sunAct = SUN_OK.concat([1]).includes(count(b, 'sun'));
+      const sunAct = SUN_ALL.includes(count(b, 'sun'));
       const buf = d.buffs || { spd: 0, atk: 0, crit: 0.05 };
       const iv = (sunAct ? 0.4 : 1.2) / d.pips * (1 - Math.min(0.95, buf.spd));
       const N = O.horizon / iv;
@@ -311,9 +369,15 @@ RD.defineAgent('moonsun', {
     function mergeCands(obs, g) {
       return obs.legal.acts.filter(a => a.result === 'merge' && !g.has(a.from) && !g.has(a.to));
     }
-    function copyCands(obs) { return obs.legal.acts.filter(a => a.result === 'copy'); }
+    // 出目7（星）のジョーカーは、太陽か月しかコピーしない（すべての場面）
+    const starJokerOk = (b, a) => !(b[a.from] && b[a.from].type === 'joker' && b[a.from].pips === 7 && b[a.to] && !['sun', 'moon'].includes(b[a.to].type));
+    function copyCands(obs) { return obs.legal.acts.filter(a => a.result === 'copy' && starJokerOk(obs.board, a)); }
     const opAct = (a, obs, note) => ({ ops: [{ op: 'act', from: a.from, to: a.to, fromId: obs.board[a.from].id, toId: obs.board[a.to].id, expect: a.result }], more: true, note });
     const opSummon = note => ({ ops: [{ op: 'summon' }], more: true, note });
+    const fixDir = r => { if (r) r.dirFixed = true; return r; };   // 向きに目的がある合成（向きの優先を使わない）
+    // 合成の向きの優先：真ん中の列の中央3マス → 4隅以外 → 4隅。同じなら左、次に上（合成の結果は重ねた先のマスに出る）
+    const CORNERS = new Set([0, 4, 10, 14]);
+    const cellRank = i => { const r = Math.floor(i / 5), c = i % 5; return (r === 1 && c >= 1 && c <= 3 ? 0 : CORNERS.has(i) ? 2 : 1) * 100 + c * 10 + r; };
 
     // 合成・召喚の結果は種類がランダム（デッキから均等）。期待値で評価する
     function expMerge(obs, b, a, f) {
@@ -350,7 +414,16 @@ RD.defineAgent('moonsun', {
       const ds = SUN_OK.includes(sc) ? 0 : dist(sc, sc > 7 && (O.over7 || over7Now) ? [4, 7] : sunTargets);
       return ds + (needMoon ? dist(count(b, 'moon'), MOON_OK) : 0);
     }
-    function isActive(b, needMoon) { return actDist(b, needMoon) === 0; }
+    // 今の盤面が活性しているか：エンジンが渡す活性状態（各ダイスの active）で判断する。
+    //   active が無い盤面（読み筋で作った盤面）だけ、個数とエンジンの activeCounts で判断する
+    function engineActive(b, type) { const d = b.find(x => x && x.type === type); return d && typeof d.active === 'boolean' ? d.active : null; }
+    function sunActive(b) {
+      const sc = count(b, 'sun'), ea = engineActive(b, 'sun');
+      if (ea == null) return SUN_OK.includes(sc);
+      return ea && (O.sunOneActive || sc !== 1);
+    }
+    function moonActive(b) { const ea = engineActive(b, 'moon'); return ea == null ? MOON_OK.includes(count(b, 'moon')) : ea; }
+    function isActive(b, needMoon) { return sunActive(b) && (!needMoon || moonActive(b)); }
 
     // 活性の立て直し：期待距離が最も小さくなる操作を1つ選ぶ
     //   コピーで確定して活性になるなら最優先（「最後をコピーにすると安心」）
@@ -358,7 +431,7 @@ RD.defineAgent('moonsun', {
     // 盤面からコピーできる組（ジョーカー → 同じ出目の別種）
     function copiesOn(b) {
       const out = [];
-      b.forEach((a, i) => { if (a && a.type === 'joker') b.forEach((c, j) => { if (c && c.type !== 'joker' && c.pips === a.pips) out.push({ from: i, to: j, result: 'copy' }); }); });
+      b.forEach((a, i) => { if (a && a.type === 'joker') b.forEach((c, j) => { if (c && c.type !== 'joker' && c.pips === a.pips && (a.pips !== 7 || ['sun', 'moon'].includes(c.type))) out.push({ from: i, to: j, result: 'copy' }); }); });
       return out;
     }
     // urgent=false のときはジョーカーのコピーを使わない（ジョーカーは成長・隣接づくりに回す）
@@ -375,7 +448,7 @@ RD.defineAgent('moonsun', {
       const cur = f1(b);
       if (cur === 0) return null;
       const sc = count(b, 'sun'), mc = count(b, 'moon');
-      const sunOk = SUN_OK.includes(sc), moonOk = !needMoon || MOON_OK.includes(mc);
+      const sunOk = sunActive(b), moonOk = !needMoon || moonActive(b);
       const full = !b.some(d => !d);
       // SPが少ない＝召喚lowSummons回分（5回分）のラインを切った（召喚できないときも含む）
       const low = !obs.legal.summon || obs.sp < costN(obs.summonCost, O.lowSummons);
@@ -527,10 +600,10 @@ RD.defineAgent('moonsun', {
     // 活性を切る（ナイトを受けるため）。確実に太陽の活性を崩せる操作
     function breakActive(obs) {
       const b = obs.board, sc = count(b, 'sun');
-      if (!SUN_OK.concat([1]).includes(sc)) return null;
+      if (!SUN_ALL.includes(sc)) return null;
       for (const a of copyCands(obs)) {
         const nb = applyCopy(b, a);
-        if (![1, 4, 7].includes(count(nb, 'sun'))) return opAct(a, obs, 'ナイトを受ける：活性を切る（コピー）');
+        if (!SUN_ALL.includes(count(nb, 'sun'))) return opAct(a, obs, 'ナイトを受ける：活性を切る（コピー）');
       }
       const ps = protectedSuns(obs, b);
       for (const a of obs.legal.acts.filter(a => a.result === 'merge' && b[a.from].type === 'sun' && !ps.has(a.from) && !ps.has(a.to))) {
@@ -564,9 +637,9 @@ RD.defineAgent('moonsun', {
       // ウ) 隣のマスに向けて合成（1/5で太陽。出目の高い組から）
       let bm = null;
       for (const a of mergeCands(obs, g)) if (adj.has(a.to) && b[a.to].type !== 'moon' && !isGrowthPair(b, a) && (!bm || b[a.to].pips > b[bm.to].pips)) bm = a;
-      if (bm) return opAct(bm, obs, note('合成'));
+      if (bm) return fixDir(opAct(bm, obs, note('合成')));
       // エ) 隣のマスの太陽以外を、別のマスへ合成して空ける
-      for (const a of mergeCands(obs, g)) if (adj.has(a.from) && !adj.has(a.to) && b[a.from].type !== 'sun' && b[a.from].type !== 'moon' && !isGrowthPair(b, a)) return opAct(a, obs, note('隣を空ける'));
+      for (const a of mergeCands(obs, g)) if (adj.has(a.from) && !adj.has(a.to) && b[a.from].type !== 'sun' && b[a.from].type !== 'moon' && !isGrowthPair(b, a)) return fixDir(opAct(a, obs, note('隣を空ける')));
       return null;
     }
 
@@ -599,6 +672,16 @@ RD.defineAgent('moonsun', {
         const P = S.pair; S.pair = null;
         const a = obs.legal.acts.find(x => x.result === 'merge' && x.from === P.from && x.to === P.to && b[x.to].id === P.toId);
         if (a) return opAct(a, obs, `${tag}：作った組を合成（${b[a.to].type}${b[a.to].pips}）`);
+      }
+      // 0.7) 同じ出目の「守るダイスと太陽」以外のダイスどうしを合成（成長どうし・ジョーカーどうしは除く。出目の低い組から）
+      if (O.freeMerge) {
+        let bf = null;
+        for (const a of mergeCands(obs, g)) {
+          if (b[a.from].type === 'sun' || b[a.to].type === 'sun') continue;
+          if (isGrowthPair(b, a) || jokerPair(b, a)) continue;
+          if (!bf || b[a.to].pips < b[bf.to].pips) bf = a;
+        }
+        if (bf) return opAct(bf, obs, `${tag}：守り・太陽以外の${b[bf.to].type}${b[bf.to].pips}どうしを合成`);
       }
       // 1) 召喚：期待値が下がらなければ（活性が崩れる心配が小さいうちは）出す。W3以降は5回分のSPを残す
       if (canSummonBuild(obs)) {
@@ -656,15 +739,17 @@ RD.defineAgent('moonsun', {
       }
       const pfOk = (!O.pairOnlyFull || full) && urgency <= O.pairMaxUrg;
       if (pfOk && (PF === 'copy' || PF === 'both')) {
-        let bp = null;
+        let bp = null, bpm = null;
         for (const a of copyCands(obs)) {
           if (g.has(a.to)) continue;                       // 守るダイスとは組にしない
           if (g.has(a.from) && !O.pairUseReserved) continue; // 調整用ジョーカーは（設定しない限り）使わない
           if (early && b[a.to].type === 'sun') continue;
           if (b[a.to].type === 'growth') continue;         // 成長どうしの組は作らない（成長のコピーだけなら 1.5 で行う）
           const e = expMerge(obs, applyCopy(b, a), { from: a.from, to: a.to }, ev) - base;
+          if (O.pairPreferMoon && b[a.to].type === 'moon' && (!bpm || e > bpm.e)) bpm = { a, e };   // 守りでない月を優先
           if (e > 0 && (!bp || e > bp.e)) bp = { a, e };
         }
+        if (bpm) bp = bpm;
         if (bp) S.pair = { from: bp.a.from, to: bp.a.to, toId: obs.board[bp.a.to].id };
         if (bp) return opAct(bp.a, obs, `${tag}：ジョーカーでコピーして合成の組を作る（${b[bp.a.to].type}${b[bp.a.to].pips}）`);
       }
@@ -747,7 +832,9 @@ RD.defineAgent('moonsun', {
       const ok = t => can.has(t) && obs.sp - cost(t) >= Math.max(O.puReserve, reserve);
       const m = mainMoon(b);
       if (lv(obs, 'sun') < 3 && ok('sun')) return 'sun';
-      if (m && m.pips >= 4) {
+      // 月・太陽をLv5まで：出目4以上の月に出目 puAdjSun 以上の太陽が隣接し、太陽も月も活性しているときだけ
+      const puPair = !O.puAdjSun || (isActive(b, true) && b.some((d, i) => d && d.type === 'moon' && d.pips >= 4 && NB[i].some(j => b[j] && b[j].type === 'sun' && b[j].pips >= O.puAdjSun)));
+      if (m && m.pips >= 4 && puPair) {
         if (lv(obs, 'moon') < 5 && ok('moon')) return 'moon';
         if (lv(obs, 'sun') < 5 && ok('sun')) return 'sun';
       }
@@ -825,6 +912,14 @@ RD.defineAgent('moonsun', {
       return bg ? opAct(bg, obs, `ジョーカー${b[bg.from].pips}で成長をコピー（月の星なし）`) : null;
     }
 
+    // 調整用ジョーカー（守るダイスの活性用）も、先頭がレーンの真ん中の手前なら、出目 reservedGrowth 以上の成長をコピーする
+    function reservedGrowthCopy(obs) {
+      if (!O.reservedGrowth) return null;
+      const b = obs.board, res = reservedJokers(b, O.keepJokers, null);
+      let bg = null;
+      for (const a of copyCands(obs)) if (res.has(a.from) && b[a.from].pips >= O.reservedGrowth && b[a.to].type === 'growth' && b[a.to].pips < 7 && (!bg || b[a.from].pips > b[bg.from].pips)) bg = a;
+      return bg ? opAct(bg, obs, `調整用のジョーカー${b[bg.from].pips}で成長をコピー（先頭が真ん中の手前）`) : null;
+    }
     // W6まで：太陽が7個あり、召喚5回分のSPがあり、先頭のモンスターがレーンの真ん中まで行っておらず、それでも打つ手がないなら、
     //   守りでない同じ出目の太陽どうしを合成する（出目の低い組から）
     function sun7Merge(obs) {
@@ -869,7 +964,7 @@ RD.defineAgent('moonsun', {
     function w12SpFix(obs, tag) {
       if (!O.w12SpFix) return null;
       const b = obs.board, sc = count(b, 'sun');
-      if ([1, 4, 7].includes(sc)) return null;
+      if (SUN_ALL.includes(sc)) return null;
       const g = guard(obs, b);
       let bm = null;
       for (const a of mergeCands(obs, g)) {
@@ -881,6 +976,100 @@ RD.defineAgent('moonsun', {
       if (!bm) return null;
       const t = b[bm.to].type, nm = t === 'moon' ? '月' : t === 'sun' ? '太陽' : t;
       return opAct(bm, obs, `${tag}：SPに余裕がないので、太陽が${sc}個のうちに${nm}${b[bm.to].pips}どうしを合成（召喚はしない）`);
+    }
+
+    // ---------- 暗殺対面 ----------
+    // 太陽の活性：エンジンの状態。太陽1個はW1〜W2だけ数える（asnSunOneEarly）
+    function asnSunOn(obs) {
+      const b = obs.board, sc = count(b, 'sun');
+      if (sc === 1) { const ea = engineActive(b, 'sun'); return !!(O.asnSunOneEarly && obs.wave <= 2 && (ea == null ? SUN_ALL.includes(1) : ea)); }
+      return sunActive(b);
+    }
+    const SUN_GOAL = SUN_OK.filter(n => n > 1).length ? SUN_OK.filter(n => n > 1) : [4];
+    const asnDist = nb => { const c = count(nb, 'sun'); return SUN_OK.includes(c) ? 0 : dist(c, SUN_GOAL); };
+    const hasBounty = d => !!(d && d.bounty > 0);
+    // 暗殺を避ける（対象マス cell）
+    function asnDodge(obs, cell, late, sunOn) {
+      const b = obs.board, d = b[cell], sc = count(b, 'sun');
+      if (!d || d.type === 'sun') return null;
+      if (d.type === 'joker') {
+        const cps = copyCands(obs).filter(a => a.from === cell);
+        const pick = f => cps.filter(f).sort((x, y) => b[y.to].pips - b[x.to].pips || x.to - y.to)[0] || null;
+        const isT = (a, t) => b[a.to].type === t;
+        let a = null;
+        if (sc === 2 || sc === 3) a = pick(x => isT(x, 'sun'));
+        else if (sc === 1 || sc === 4) a = pick(x => !isT(x, 'moon') && !isT(x, 'sun')) || (sc === 1 ? pick(x => isT(x, 'sun')) : null);
+        else a = (SUN_OK.includes(sc + 1) ? pick(x => isT(x, 'sun')) : null) || pick(x => !isT(x, 'moon') && !isT(x, 'sun')) || pick(x => !isT(x, 'moon'));
+        if (a) return fixDir(opAct(a, obs, `暗殺対面：ジョーカーに暗殺。${b[a.to].type}${b[a.to].pips}をコピーして避ける（太陽${sc}個）`));
+        const m = obs.legal.acts.find(x => x.from === cell && x.result === 'merge');
+        return m ? fixDir(opAct(m, obs, '暗殺対面：ジョーカーに暗殺。ジョーカーどうしを合成して避ける')) : null;
+      }
+      let ok;
+      if (!late) ok = obs.sp >= costN(obs.summonCost, 2) || b.some(j => j && j.type === 'joker' && b.some(s => s && s.type === 'sun' && s.pips === j.pips));
+      else ok = !sunOn;
+      if (!ok) return null;
+      const cand = obs.legal.acts.filter(x => x.from === cell && x.result === 'merge' && b[x.to].type === d.type && (late || !hasBounty(b[x.to])))
+        .sort((x, y) => cellRank(x.to) - cellRank(y.to));
+      return cand.length ? fixDir(opAct(cand[0], obs, `暗殺対面：${d.type}${d.pips}に暗殺。同じ種類へ合成して避ける${late ? '（懸賞金の縛りなし）' : ''}`)) : null;
+    }
+    function asnDecide(obs) {
+      if (obs.over) return null;
+      const b = obs.board;
+      const fpos = obs.front ? obs.front.pos : 0;
+      const late = fpos >= O.asnCorner;
+      const sunOn = asnSunOn(obs);
+      // 1. 暗殺が飛んできた
+      const pend = (obs.pending || []).filter(p => p.kind === 'assassin' && p.cells && p.cells.length).sort((x, y) => x.in - y.in);
+      for (const p of pend) {
+        const cell = p.cells[0], d = b[cell]; if (!d) continue;
+        const key = cell + ':' + Math.round((obs.t + p.in) * 10);
+        if (S.asnDone.has(key) && S.asnDone.get(key) !== d.id) continue;   // もう避けた（対象のダイスが変わった）
+        const r = asnDodge(obs, cell, late, sunOn);
+        if (r) { S.asnDone.set(key, d.id); return r; }
+      }
+      // 2. 太陽が活性していれば止める
+      if (sunOn) return (O.asnPu ? pu(obs) : null) || idle('暗殺対面：太陽が活性しているので止める');
+      // 3. 召喚して活性を狙う
+      if (obs.legal.summon) return opSummon('暗殺対面：太陽が活性していないので召喚');
+      // 4. 召喚できない：ジョーカーで太陽をコピー → ジョーカー・成長以外のダイスどうしを合成（2つ目の角の手前は、相手の盤面に暗殺がないときだけ・懸賞金の付いていないダイスだけ）
+      const oppAsn = !!(obs.opponent && obs.opponent.board && obs.opponent.board.some(x => x && x.type === 'assassin'));
+      const freeOk = i => late || !hasBounty(b[i]);
+      const cur = asnDist(b);
+      if (late || !oppAsn) {
+        let bc = null;
+        for (const a of copyCands(obs)) {
+          if (b[a.from].type !== 'joker' || b[a.to].type !== 'sun' || !freeOk(a.from)) continue;
+          const v = asnDist(applyCopy(b, a));
+          if (v < cur && (!bc || v < bc.v || (v === bc.v && b[a.from].pips < b[bc.a.from].pips))) bc = { a, v };
+        }
+        if (bc) return opAct(bc.a, obs, `暗殺対面：ジョーカー${b[bc.a.from].pips}で太陽をコピー${late ? '（2つ目の角を越えた）' : ''}`);
+        let bm = null;
+        for (const a of obs.legal.acts) {
+          if (a.result !== 'merge' || !freeOk(a.from) || !freeOk(a.to)) continue;
+          const t = b[a.from].type;
+          if (t === 'joker' || t === 'growth' || b[a.to].type === 'joker' || b[a.to].type === 'growth') continue;
+          const r = distMerge(b, a, asnDist);
+          if (!(r.e < cur - 1e-9 || (r.e <= cur + 1e-9 && r.p0 > 0))) continue;
+          const sc = r.e - r.p0;
+          if (!bm || sc < bm.sc - 1e-9 || (Math.abs(sc - bm.sc) < 1e-9 && b[a.to].pips < b[bm.a.to].pips)) bm = { a, sc };
+        }
+        if (bm) return opAct(bm.a, obs, `暗殺対面：${b[bm.a.to].type}${b[bm.a.to].pips}どうしを合成して太陽を狙う${late ? '（2つ目の角を越えた）' : ''}`);
+      }
+      if (late) {
+        // ジョーカーでほかのダイスをコピーして合成の組を作る（次の判断で上の合成が拾う）
+        let bf = null;
+        for (const a of copyCands(obs)) {
+          if (b[a.from].type !== 'joker') continue;
+          const t = b[a.to].type; if (t === 'growth' || t === 'moon') continue;
+          const r = distMerge(applyCopy(b, a), { from: a.from, to: a.to }, asnDist);
+          if (!(r.e < cur - 1e-9 || (r.e <= cur + 1e-9 && r.p0 > 0))) continue;
+          if (!bf || r.e - r.p0 < bf.sc) bf = { a, sc: r.e - r.p0 };
+        }
+        if (bf) return opAct(bf.a, obs, `暗殺対面：ジョーカーで${b[bf.a.to].type}${b[bf.a.to].pips}をコピーして合成の組を作る`);
+        const jj = obs.legal.acts.find(a => a.result === 'merge' && jokerPair(b, a));
+        if (jj) return opAct(jj, obs, '暗殺対面：ジョーカーどうしを合成して太陽を狙う');
+      }
+      return idle(late ? '暗殺対面：活性の手がない' : oppAsn ? '暗殺対面：召喚できない（相手の盤面に暗殺があるので動かない）' : '暗殺対面：召喚できない（打つ手なし）');
     }
 
     function decideInner(obs) {
@@ -909,7 +1098,7 @@ RD.defineAgent('moonsun', {
       track(obs);
       // ボスの記録
       if (obs.boss) {
-        if (S.bossSeen !== obs.boss.id) { S.bossSeen = obs.boss.id; S.eatKnight = null; }
+        if (S.bossSeen !== obs.boss.id) { S.bossSeen = obs.boss.id; S.eatKnight = S.knightPlanWave === obs.wave ? S.knightPlan : null; }
         S.bossElapsed = obs.boss.elapsed;
       } else if (S.bossSeen != null) { S.lastBossKill = S.bossElapsed; S.bossSeen = null; }
 
@@ -920,16 +1109,31 @@ RD.defineAgent('moonsun', {
         if (bg) return opAct(bg, obs, `W${obs.wave}：2つ目の角を越えるまではジョーカー${b[bg.from].pips}で成長をコピー`);
       }
 
+      // 0.5 ボス出現の演出中（phase 'intro'）：ナイトを受けるなら、ここで活性を切る
+      const eatJudge = () => obs.wave <= 3 || otherStar || moonStar || S.lastBossKill <= O.knightEatKill;
+      if (obs.phase === 'intro') {
+        S.introWave = obs.wave;
+        if (obs.nextBoss && obs.nextBoss.type === 'knight' && !starDone) {
+          if (S.knightPlanWave !== obs.wave) {
+            S.knightPlanWave = obs.wave; S.knightPlan = eatJudge();
+            ctx.log(`ナイト：${S.knightPlan ? '受ける' : '受けない'}（演出中に判断。W${obs.wave} 星${otherStar || moonStar} 直前のボス${S.lastBossKill.toFixed(1)}s）`);
+          }
+          if (S.knightPlan) return breakActive(obs) || idle('ナイトを受ける：演出中に活性を切った。スキルを待つ');
+        }
+        return pu(obs) || idle('ボス出現の演出');
+      }
+
       // 1. ボス戦
       if (obs.phase === 'boss' && obs.boss) {
         const B = obs.boss;
         // 月の星（太陽隣接済み）がなければナイトを受ける候補。隣に太陽がいない月の星は「星がある」扱い
         if (B.type === 'knight' && !starDone) {
           if (S.eatKnight == null) {
-            S.eatKnight = obs.wave <= 3 || otherStar || moonStar || S.lastBossKill <= O.knightEatKill;
+            S.eatKnight = eatJudge();
             ctx.log(`ナイト：${S.eatKnight ? '受ける' : '受けない'}（W${obs.wave} 星${otherStar || moonStar} 直前のボス${S.lastBossKill.toFixed(1)}s）`);
           }
-          if (S.eatKnight && B.cast === 0) return breakActive(obs) || idle('ナイトを受ける：スキルを待つ');
+          // 演出中に切っている。演出がなかった（または切れなかった）ときだけ、スキルの前に切る
+          if (S.eatKnight && B.cast === 0) return (S.introWave === obs.wave && !isActive(b, needMoon) ? null : breakActive(obs)) || idle('ナイトを受ける：スキルを待つ');
           if (S.eatKnight && B.cast >= 1) return repairKnight(obs, needMoon, 'ナイト後の立て直し', moonStar) || idle('ナイト後：打てる立て直しなし');
         }
         if (B.type === 'knight' && B.cast >= 1 && !isActive(b, needMoon)) return repairKnight(obs, needMoon, 'ナイト後の立て直し', moonStar) || idle('ナイト後：打てる立て直しなし');
@@ -941,6 +1145,13 @@ RD.defineAgent('moonsun', {
       if (obs.phase !== 'wave') return pu(obs) || idle('ボス抽選・相手待ち');
       // 月の星がなければ、出目4以上のジョーカーは成長をコピー（危ない場面＝先頭が2つ目の角を越えた、は除く）
       if (frontPos < 8.5) { const r = highJokerGrowthCopy(obs, moonStar); if (r) return r; }
+      // 調整用ジョーカーも、先頭がレーンの真ん中の手前なら出目3以上の成長をコピー
+      if (frontPos < O.prepLine) { const r = reservedGrowthCopy(obs); if (r) return r; }
+      // W1：先頭がレーンの真ん中を越えていたら、出目1の月どうしを合成
+      if (O.w1MoonMerge && obs.wave === 1 && frontPos >= O.prepLine) {
+        const a = obs.legal.acts.find(x => x.result === 'merge' && b[x.from].type === 'moon' && b[x.to].type === 'moon' && b[x.to].pips === 1);
+        if (a) return opAct(a, obs, 'W1：先頭が真ん中を越えたので出目1の月どうしを合成');
+      }
 
       // 2. 活性準備（W3〜：レーンの真ん中を越えた／W1〜W2：2つ目の角を越えた）
       const line = obs.wave <= 2 ? O.earlyLine : O.prepLine;
@@ -954,6 +1165,11 @@ RD.defineAgent('moonsun', {
       }
       // 押し返したら（先頭がラインより resumeGap 手前まで戻ったら）作り込みを再開する
       if (S.frozenWave === obs.wave && O.resumeGap > 0 && frontPos < O.prepLine - O.resumeGap && obs.wave >= 3) S.frozenWave = 0;
+      // 2.4 alwaysBuildWave以降：1つ目の角まで押し返したら、火力に関係なく出目上げを再開する（詰むまで）
+      if (S.frozenWave === obs.wave && O.alwaysBuildWave && obs.wave >= O.alwaysBuildWave && frontPos <= O.resumeLine && S.judgedAt < 0) {
+        S.judgedAt = obs.t; S.frozenWave = 0; S.weakWave = obs.wave; S.buildWave = obs.wave;
+        ctx.log(`W${obs.wave}：押し返したので、火力に関係なく出目上げを再開`);
+      }
       // 2.5 W5以降：1つ目の角まで押し返したら火力を判定。次のウェーブに足りなければ作り込みを再開する
       if (S.frozenWave === obs.wave && O.weakWave > 0 && obs.wave >= O.weakWave && frontPos <= O.resumeLine && S.judgedAt < 0) {
         const j = judgePower(obs);
@@ -1030,9 +1246,25 @@ RD.defineAgent('moonsun', {
     return {
       decide(obs) {
         const savedPair = S.pair, savedFix = S.fixPair;
-        let r = decideInner(obs);
-        // 何も打つ手がないとき：W6まで太陽7個の待機なら太陽どうしを合成。太陽が活性していなければ太陽をそろえる（W3以降）
-        if (!(r && r.ops && r.ops.length)) { const m = sun7Merge(obs) || sunIdleFix(obs); if (m) r = m; }
+        let r;
+        if (ASN) r = asnDecide(obs);   // 暗殺対面：通常の動きは使わない
+        else {
+          r = decideInner(obs);
+          // 何も打つ手がないとき：W6まで太陽7個の待機なら太陽どうしを合成。太陽が活性していなければ太陽をそろえる（W3以降）
+          if (!(r && r.ops && r.ops.length)) { const m = sun7Merge(obs) || sunIdleFix(obs); if (m) r = m; }
+        }
+        // 合成の向き：向きに目的がない合成は、結果が優先度の高いマスに出る向きにする
+        if (O.mergeDir && r && r.ops && r.ops.length && r.ops[0].op === 'act' && r.ops[0].expect === 'merge' && !r.dirFixed) {
+          const op = r.ops[0];
+          const rev = obs.legal.acts.find(x => x.result === 'merge' && x.from === op.to && x.to === op.from);
+          if (rev && cellRank(op.from) < cellRank(op.to)) {
+            const P = S.pair, F = S.fixPair;
+            r.ops[0] = Object.assign({}, op, { from: op.to, to: op.from, fromId: op.toId, toId: op.fromId });
+            // 作った組の記録は向きに関係なく同じ組
+            if (P && P.from === op.from && P.to === op.to) S.pair = Object.assign({}, P, { from: op.to, to: op.from, toId: op.fromId });
+            if (F && F.from === op.from && F.to === op.to) S.fixPair = Object.assign({}, F, { from: op.to, to: op.from, toId: op.fromId, fromId: op.toId });
+          }
+        }
         // 重ねる操作のドラッグ中・間隔待ちなら、重ねる操作は出さずに待つ（盤面が変わってから決め直す）
         //   作った組の記録は、この判断の前の状態に戻す（組の合成を待つだけなら記録は残す）
         if (r && r.ops && r.ops.length && r.ops[0].op === 'act' && obs.control && obs.control.actReadyIn > 1e-9) { S.pair = savedPair; S.fixPair = savedFix; return null; }

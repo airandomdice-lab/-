@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
-<title>ランダムダイス 練習・対戦シミュレータ AIRandomDicesim 3.13.1</title>
+<title>ランダムダイス 練習・対戦シミュレータ AIRandomDicesim 4.3.7（Web版）</title>
 <style>
 /* ===== 見た目（CSS）=====
    色・角丸・間隔は :root の変数で決める。画面の構成：.app（左：盤面と操作 .stage ／ 右：タブとパネル .side）。
@@ -26,6 +26,9 @@ canvas{touch-action:none}
 body{transition:background-color .6s}
 body.death{--bg:#2a0d10;--panel:#3a1418;--panel2:#47191e;--line:#5c242a}
 .dwtag{color:#ff6b6b;font-weight:700}
+/* 狂暴化（v6.7.2〜）は紫（4.1.0〜）。デスウェーブの赤より優先 */
+body.enrage{--bg:#1d0f2c;--panel:#2a1740;--panel2:#351d50;--line:#4b2a6c}
+.ertag{color:#c58cff;font-weight:700}
 .app{max-width:560px;margin:0 auto;padding:8px}
 .side{margin-top:10px}
 @media (min-width:960px){
@@ -64,7 +67,7 @@ label.btnlike{display:inline-block}
 button:active{transform:scale(.97)}
 button.main{background:var(--acc2);border-color:#3b74c8;font-weight:bold;flex:1;font-size:16px}
 button.sm{padding:5px 8px;font-size:12px}
-button:disabled{opacity:.45;cursor:default}
+button:disabled,button.dis{opacity:.45;cursor:default}
 button.on{background:#2d6b45;border-color:#3c8a5a}
 .pu{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .pu button{padding:5px 2px;font-size:11px;line-height:1.3;border-top:3px solid var(--dc,var(--line))}
@@ -364,6 +367,7 @@ tr.plrow{cursor:pointer} tr.plrow.on td{background:#2a2f45}
     <!-- ログ・リプレイ -->
     <div class="pane" id="pFull">
       <div class="card">
+        <label><span class="k">ログを保存する（オフでも試合は同じように進みます）</span><input type="checkbox" id="cSaveLog"></label>
         <div class="row"><button class="main" id="bCopy">ログをコピー</button><button id="bFullUp">表示を更新</button></div>
         <label><span class="k">撃破も1体ずつ記録する（次の開始から）</span><input type="checkbox" id="cLogK"></label>
         <textarea id="fullT" readonly class="code" style="height:320px"></textarea>
@@ -371,10 +375,11 @@ tr.plrow{cursor:pointer} tr.plrow.on td{background:#2a2f45}
       </div>
       <div class="card">
         <h3 style="margin-top:0">リプレイ（試合の記録）</h3>
-        <p class="note" id="recInfo">記録中</p>
+        <label><span class="k">リプレイを保存する（次の開始から）</span><input type="checkbox" id="cSaveRec"></label>
+        <p class="note" id="recInfo">記録しない設定です</p>
         <label><span class="k">記録のメモ（任意）</span><input type="text" id="recMemo" style="width:60%" placeholder="例：太陽デッキ練習"></label>
         <div class="row"><button class="main" id="bRecDl">リプレイを書き出す</button><button id="bRecCopy">コピー</button></div>
-        <p class="note">試合は開始から自動で記録しています。書き出したファイル（JSON）には、シミュレータの版・エンジンの指紋・設定（本家バージョン・HP増加の仕様を含む）・シード・操作（何ステップ目に誰が何をしたか）・途中の答え合わせ用の要約が入っていて、同じ版のエンジンで試合をそのまま再現できます。</p>
+        <p class="note">「リプレイを保存する」をオンにすると、次の開始から試合を記録します（初期設定はオフ）。書き出したファイル（JSON）には、シミュレータの版・エンジンの指紋・設定（本家バージョン・HP増加の仕様を含む）・シード・操作（何ステップ目に誰が何をしたか）・途中の答え合わせ用の要約が入っていて、同じ版のエンジンで試合をそのまま再現できます。</p>
       </div>
     </div>
 
@@ -399,7 +404,7 @@ tr.plrow{cursor:pointer} tr.plrow.on td{background:#2a2f45}
       </details>
       <details class="sec">
         <summary>本家バージョン</summary>
-        <p class="note">・v6.0.5：1.26.0 と同じ対戦仕様（HP増加は2021年5月の式、ダイス・スキンも同じ）。<br>・v6.5.0（過熱シーズン）：雑魚HPの1段あたりの増加幅が (W+4)/5 倍（2W以降 20(W−1)(W+4)(W+6)、1Wは100）。時間の仕組み・中ボス5倍は同じ。ダイスに 過熱・壊れた成長・ランダム成長・死・核・地獄 が加わる。ボスにスライム（本家は v6.4.0 で追加）が加わる。10W からデスウェーブ（敵の速度+20%、ボスの1回目のスキルが1.5秒後）。中ボスと高速（スピードモンスター）は3Wから、決まった残り時間に1体ずつ出る（3W：53・37・21・5秒、4W：45・31・17・2秒、5W以降：47・35・23・11秒。高速は中ボスの0.5秒後）。高速は倒しても通しても相手に送られず、送り込みはすべて通常モンスター。<br>・複合：すべてのバージョンのダイス・スキン・HP増加の仕様を選べます。名前の隣の（6.0.5）などは、その仕様が最初に入ったバージョンです。バージョンで仕様が違うものは、それぞれのバージョンが別の項目として並びます。</p>
+        <p class="note">・v6.0.5：1.26.0 と同じ対戦仕様（HP増加は2021年5月の式、ダイス・スキンも同じ）。<br>・v6.5.0（過熱シーズン）：雑魚HPの1段あたりの増加幅が (W+4)/5 倍（2W以降 20(W−1)(W+4)(W+6)、1Wは100）。時間の仕組み・中ボス5倍は同じ。ダイスに 過熱・壊れた成長・ランダム成長・死・核・地獄 が加わる。ボスにスライム（本家は v6.4.0 で追加）が加わる。10W からデスウェーブ（敵の速度+20%、ボスの1回目のスキルが1.5秒後）。中ボスと高速（スピードモンスター）は3Wから、決まった残り時間に1体ずつ出る（3W：53・37・21・5秒、4W：45・31・17・2秒、5W以降：47・35・23・11秒。高速は中ボスの0.5秒後）。高速は倒しても通しても相手に送られず、送り込みはすべて通常モンスター。<br>・v6.6.5（祝福核全盛期）：6.5.0 と同じHP・デスウェーブに、祝福・水晶6.6.5・早い寒波・シーズンダイス（コンボ・吹雪）。<br>・v6.7.2（パーティーシーズン）：6.6.5 と同じHP・デスウェーブ・祝福・水晶など。シーズンダイスは成長・召喚。20ウェーブからボスの狂暴化（k＝ウェーブ−20。スネーク：召喚HP+k×5%・召喚位置がk÷10前へ／サイレント：封印+k÷2個／ランダムナイト：倒れたときにもう一度変更／マジシャン：メテオ予告中の被ダメージ−k×5%／レオン：咆哮の個数と下がる出目+k÷10、倒れたときも咆哮／IIIIIIIIII：ハッキング予告中の被ダメージ−k×5%、ハッキングが永続／スライム：分裂数+k÷10／バジリスク：召喚するボスも狂暴化。÷は切り捨て）。狂暴化以降の撃破SPは20W基準。新ダイス 地震・雪玉。死・地獄の亡霊が出る即死のSPは70%、コンボの基本攻撃力・フローの加速が強化。<br>・複合：すべてのバージョンのダイス・スキン・HP増加の仕様を選べます。名前の隣の（6.0.5）などは、その仕様が最初に入ったバージョンです。バージョンで仕様が違うものは、それぞれのバージョンが別の項目として並びます。</p>
       </details>
       <details class="sec">
         <summary>ダイス・ボス・フィールドの一覧<small>登録内容から自動で作成</small></summary>
@@ -481,7 +486,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '3.13.1';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '4.3.7';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -522,6 +527,11 @@ defineVersion('6.5.0', { label: 'v6.5.0（過熱シーズン）', deathWave: tru
 //   season：シーズンダイス（family のID）。デッキに入れると1種につき基本クリティカル率 +5%（会心率バフとは別に足す）
 defineVersion('6.6.5', Object.assign({}, VERSIONS['6.5.0'], { id: '6.6.5', label: 'v6.6.5（祝福核全盛期）', short: '6.6.5',
   season: ['combo', 'blizzard'] }));
+// v6.7.2（パーティーシーズン）（4.0.0〜、ユーザー指定）：HP増加・デスウェーブ・中ボスと高速・祝福・水晶などは 6.6.5 と同じ。
+//   シーズンダイスは成長・召喚。20ウェーブからボスの狂暴化（enrageFrom。効果の数値は未定のため、いまは「狂暴化の状態」を出すだけ）。
+//   新ダイス：地震・雪玉。パッチ：死・地獄の即死（亡霊が出るもの）のSPが70%、コンボの基本攻撃力・フローの加速が強化（別IDの _672）
+defineVersion('6.7.2', Object.assign({}, VERSIONS['6.6.5'], { id: '6.7.2', label: 'v6.7.2（パーティーシーズン）', short: '6.7.2',
+  season: ['growth', 'summon'], enrageFrom: 20 }));
 // シーズンダイス（family のID の配列）：バージョン選択ならそのバージョンの season、複合なら cfg.season（好きなだけ選べる）（3.8.0〜）
 function seasonOf(c) {
   const v = c && c.version;
@@ -544,6 +554,7 @@ function versionHas(c, key) {
   return !!(VERSIONS[v] || VERSIONS[VERSION_ORDER[0]])[key];
 }
 function availableIn(def, v) {
+  if (def && def.ex) return v === MIX; // EXダイス：総合環境（複合）だけ（3.14.0〜）
   if (!v || v === MIX) return true;
   if (!VERSIONS[v]) v = VERSION_ORDER[0];
   const s = verIndex(def.since || VERSION_ORDER[0]);
@@ -735,13 +746,17 @@ defineParam('bulletSpeed',   { label: '弾速（単位/秒）', step: 1 });
 defineParam('bossCd',        { label: 'ボススキル間隔(秒)' });
 defineParam('rollTime',      { label: 'ボス抽選の時間(秒)', step: 0.5, min: 0 });
 // デスウェーブ（v6.5.0 以降。v6.0.5 にはない）（2.4.0〜）
+// ボスの狂暴化（v6.7.2〜。4.0.0〜）：cfg.enrageWave 以降のボスは狂暴化の状態になる。効果の数値は未定のため、いまは状態だけ（AIの観測 enraged）
+defineParam('enrageWave', { def: 20, label: 'ボスの狂暴化の開始ウェーブ（v6.7.2〜）', step: 1, min: 1, int: true, ai: true,
+  log: g => g.hasEnrage ? ` 狂暴化${g.cfg.enrageWave}W〜` : '' });
 defineParam('deathWave',      { def: 10, label: 'デスウェーブの開始ウェーブ（HP増加 v6.5.0〜）', step: 1, min: 1, int: true, ai: true,
   log: g => g.hasDeathWave ? ` デスウェーブ${g.cfg.deathWave}W〜` : '' });
 defineParam('deathSpeedUp',   { def: 0.2, label: 'デスウェーブ：敵の速度の増加（割合）', step: 0.05, min: 0, ai: true });
 defineParam('deathBossFirst', { def: 1.5, label: 'デスウェーブ：ボスの1回目のスキルまで(秒)', step: 0.1, min: 0, ai: true });
 
 function diceClass(cfg, type) {
-  if (cfg.cls[type] != null) return cfg.cls[type];
+  if (DICE[type] && DICE[type].fixedClass) return DICE[type].fixedClass; // クラス固定（EXの強化歯車はクラス15。3.14.0〜）
+  if (cfg.cls[type] != null) return DICE[type].classMin ? Math.max(DICE[type].classMin, cfg.cls[type]) : cfg.cls[type]; // classMin：選べる最低クラス（EXのブラッドムーン・シリウスは10。4.3.0〜）
   return DICE[type].rar === 'L' ? 10 : 15;
 }
 
@@ -834,6 +849,7 @@ class Game {
     this.cfg = Object.assign(defaultConfig(), cfg || {});
     const c = this.cfg;
     this.hpSpec = hpSpecOf(c);                // 実際に使うHP増加の仕様（2.0.0〜）
+    this.hasEnrage = hpSpecHas(c, 'enrageFrom'); // ボスの狂暴化があるか（v6.7.2〜。デスウェーブと同じくHPテーブルに付く：複合はHPテーブルが 6.7.2 なら。4.0.0〜）
     this.hasDeathWave = hpSpecHas(c, 'deathWave'); // デスウェーブがあるか：HPテーブルが 6.5.0 以降なら（複合で 6.0.5 のHPなら無し。3.3.1〜）
     this.midFastTable = !!versionVal(c, 'midFastAt'); // 中ボス・高速が時刻表で出るバージョンか（2.5.0〜）
     this.noSendKinds = versionVal(c, 'noSendKinds') || []; // 相手に送らない敵の種類（2.5.0〜）
@@ -867,6 +883,7 @@ class Game {
     this.oppTrack = [];    // 相手トラック上の敵（撃破予定時刻）［練習］
     this.releaseQ = [];    // 自陣へのテレポート放出（自分の事故・相手からの放出）
     this.over = false; this.log = []; this.events = []; this.flog = []; this.tag = '';
+    this.logOn = true;     // 全体ログ（flog）に書くか（3.15.0〜。false なら L() は何もしない。試合の進み方には影響しない）
     this.stepCount = 0;    // 終わったステップ数（リプレイで操作の時点を表す）
     this.inStep = false;   // step の処理中か（ステップ中に起きた操作はリプレイに記録しない）
     this.actor = 'human';  // いま操作しているのは誰か（'human' / 'auto' / 'ai:<id>'）。リプレイの記録用
@@ -926,17 +943,17 @@ class Game {
     return d[d.length - 1];
   }
   // フィールドのモンスターすべてを dur 秒停止（3.8.0〜）。bossSkill：ボスのスキルの発動とクールタイムも、停止が延びた分だけ遅らせる
-  freezeAll(dur, bossSkill) {
-    for (const e of this.enemies) {
-      if (!e.alive) continue;
-      const until = this.t + dur, prev = Math.max(this.t, e.frozenUntil);
-      if (bossSkill && e.nextSkill != null && until > prev) e.nextSkill += until - prev;
-      e.frozenUntil = Math.max(e.frozenUntil, until);
-    }
+  freezeAll(dur, bossSkill) { for (const e of this.enemies) if (e.alive) this.freezeEnemy(e, dur, bossSkill); }
+  // 1体を dur 秒停止（水晶・早い寒波と同じ停止。bossSkill ならボスのスキルも遅らせる）（4.0.0〜。雪玉）
+  freezeEnemy(e, dur, bossSkill) {
+    const until = this.t + dur, prev = Math.max(this.t, e.frozenUntil);
+    if (bossSkill && e.nextSkill != null && until > prev) e.nextSkill += until - prev;
+    e.frozenUntil = Math.max(e.frozenUntil, until);
   }
   note(msg) { this.events.push({ t: this.t, w: this.wave, msg, seq: ++this.noteSeq }); if (this.events.length > 200) this.events.shift(); this.L(msg); }
   // 全体ログ
   L(msg) {
+    if (this.logOn === false) return;
     if (!this.flog) this.flog = [];
     const ph = this.phase === 'boss' ? 'ボス' : this.phase === 'intro' ? '出現' : this.phase === 'roll' ? '抽選' : this.phase === 'wait' ? '待ち' : '通常';
     this.flog.push(`[${this.wave}W${ph} ${this.t.toFixed(1)}s SP${Math.floor(this.sp)} L${this.life}] ${msg}`);
@@ -992,7 +1009,7 @@ class Game {
     return Math.min(waveK(this.wave), Math.floor((this.t - this.waveStart) / dt + 1e-9) + 1);
   }
   curHP() { return this.tableHP(this.wave, this.curK()); }
-  killSP(kind) { return this.cfg.killSpMul * this.wave * ENEMY[kind].sp; }
+  killSP(kind) { return this.cfg.killSpMul * this.spWave() * ENEMY[kind].sp; } // 狂暴化以降は20W基準（4.1.0〜）
 
   spawnEnemy(kind, hp, opts) {
     hp = this.filter('spawnHp', hp, { kind, opts });
@@ -1014,6 +1031,12 @@ class Game {
   }
   // デスウェーブ中か（デスウェーブのあるバージョンで、cfg.deathWave 以降のウェーブ）（2.4.0〜）
   deathWaveOn() { return this.hasDeathWave && this.wave >= this.cfg.deathWave; }
+  // ボスの狂暴化の状態か（v6.7.2〜、cfg.enrageWave 以降のウェーブ。4.0.0〜。効果は 4.1.0〜）
+  enrageOn() { return !!this.hasEnrage && this.wave >= this.cfg.enrageWave; }
+  // 狂暴化の段階 k＝ウェーブ数−開始ウェーブ（20Wで0。狂暴化していなければ −1）（4.1.0〜、ユーザー指定）。「徐々に」はこの k に比例する
+  enrageK() { return this.enrageOn() ? this.wave - this.cfg.enrageWave : -1; }
+  // 撃破SPに使うウェーブ数：狂暴化があるバージョンでは、開始ウェーブ（20W）から先は増えない（4.1.0〜）
+  spWave() { return this.hasEnrage ? Math.min(this.wave, this.cfg.enrageWave) : this.wave; }
   // 敵の元の速さ（減速・凍結などを掛ける前）。デスウェーブ中は (1 + cfg.deathSpeedUp) 倍
   baseSpeed(e) { return this.deathWaveOn() ? e.speed * (1 + this.cfg.deathSpeedUp) : e.speed; }
 
@@ -1098,6 +1121,8 @@ class Game {
       side: this.side, life: this.life, sp: this.sp, wave: this.wave, over: this.over,
       phase: this.phaseName(),
       summonCount: this.summonCount, field: this.cfg.field,
+      // 相手のフィールドの中身（自分の obs.field と同じ形：楽園の会心マス paradise、コロシアムの砂 sand など。画面に見えるもの。4.3.4〜）
+      fieldInfo: (F => Object.assign({ id: this.cfg.field, lv: this.cfg.fieldLv }, F && F.observe ? JSON.parse(JSON.stringify(F.observe(this) || {})) : {}))(FIELDS[this.cfg.field]),
       deck: this.cfg.deck.map(type => ({ type: aiType(type), name: DICE[type].name, lv: this.lv(type) })),
       board: this.board.map((d, i) => {
         if (!d) return null;
@@ -1354,20 +1379,34 @@ class Game {
     // ハッキングされたダイスの攻撃は回復になる。v6.5.0〜は与えるはずのダメージではなく基礎攻撃力の分だけ（ボス図鑑。3.4.0〜）
     if (d && d.ixHack && !d.hacked) { e.hp = Math.min(e.maxHp, e.hp + amt * d.ixHack); return; } // 相手の ix10：与えるはずのダメージ×HP転換比率を回復（3.5.0〜）
     if (d && d.hacked) { const h = this.boss650 && (DICE[d.type].baseAtk || DICE[d.type].atk) ? this.baseAtk(d.type, d) : amt; e.hp = Math.min(e.maxHp, e.hp + h); return; }
+    { const red = this.enrageGuard(e); if (red > 0) amt *= 1 - red; } // 狂暴化：メテオ・ハッキングの準備中は受けるダメージが減る（4.1.0〜）
     e.hp -= amt;
     if (e.hp <= 0) this.kill(e);
   }
-  kill(e) {
+  // 狂暴化したボスが受けるダメージの軽減率（4.1.0〜、ユーザー指定）：ボスの定義の enrageGuard（予告スキルの種類）の予告が出ている間、k×5%（上限100%）
+  enrageGuard(e) {
+    if (!e.bossType || !this.pending.length) return 0;
+    const B = BOSSES[e.bossType], k = this.enrageK(); if (!B || !B.enrageGuard || k <= 0) return 0;
+    return this.pending.some(p => p.src === e && p.kind === B.enrageGuard) ? Math.min(1, k * 0.05) : 0;
+  }
+  // 狂暴化したボス（手下の召喚ボスも）が倒れたときの能力（ランダムナイト・レオン。4.1.0〜）
+  enrageDeath(e) {
+    if (!e || !e.bossType || this.enrageK() < 0) return;
+    const B = BOSSES[e.bossType]; if (B && B.onEnragedDeath) B.onEnragedDeath(this, e, B.name + '（狂暴化）');
+  }
+  kill(e, spMul) {
     e.alive = false;
     if (e.kind === 'boss') { this.bossDone('kill'); return; }
     const E = ENEMY[e.kind];
-    let g = E.sp ? this.fieldSP(this.killSP(e.kind)) : 0; // 亡霊などSPのない敵は航海日記も引かない
+    let g = E.sp ? this.fieldSP(this.killSP(e.kind)) : 0;
+    if (spMul != null && spMul !== 1) g *= spMul; // 即死のSP（v6.7.2 の死・地獄：亡霊が出る即死は70%。4.0.0〜） // 亡霊などSPのない敵は航海日記も引かない
     g = this.filter('killSP', g, { enemy: e });
     this.sp += g; this.ws.spKill += g; this.ws.kills++;
     if (this.cfg.logKills) this.L(`撃破 ${E.name}${e.marked ? '（印）' : ''} +${g}SP`);
     if (this.sendsOnDeath(e)) this.toOpp(1);
     this.emit('kill', { enemy: e, sp: g });
     if (E.onKill) E.onKill(this, e);
+    if (e.bossType && e.bossType !== 'slime' && e.nextSkill !== undefined) this.enrageDeath(e); // 召喚されたボス（バジリスクの手下・転移ボス）が倒れたとき（4.1.0〜）
     this.afterBossMinion(e);
   }
   // ボス由来の状態（ボスの封印・ハッキングなど、効果の onBossDone）を解く
@@ -1395,14 +1434,15 @@ class Game {
     // 即死の出どころ（3.2.1〜）：乱数 r が [0, pd) なら撃ったダイス自身（死）、[pd, 1−miss) なら隣接バフ（地獄）。
     //   乱数の数・即死になるかどうかは今までと同じ。出どころは亡霊を送るか（ダイスの instaGhost）だけに使う
     const r = this.rng();
-    if (r < 1 - miss) this.instaKill(t, d, r < pd ? D : null);
+    if (r < 1 - miss) this.instaKill(t, d, r < pd ? D : null, r < pd ? D.instaSpMul : s.buf.hellSp);
   }
   // 即死：撃破と同じ（SP・送り込み）に加えて、通常ウェーブ中（とボス出現の演出中。3.13.1〜）なら相手に亡霊を1体（亡霊・テレポートの放出は除く）
   //   src：即死させたダイスの定義（死のダイス自身の判定のとき）。src.instaGhost === false なら亡霊を送らない（v6.0.5 の死。3.2.1〜）
-  instaKill(e, d, src) {
+  //   spMul：亡霊が出る即死のSPの倍率（v6.7.2 の死・地獄は0.7。4.0.0〜）
+  instaKill(e, d, src, spMul) {
     const ghost = !(src && src.instaGhost === false) && !ENEMY[e.kind].noGhost && !e.marked && (this.phase === 'wave' || this.phase === 'intro'); // ボス出現の演出中も亡霊は送る（3.13.1〜）
     e.hp = 0; this.ws.insta++;
-    this.kill(e);
+    this.kill(e, ghost && spMul != null ? spMul : 1);
     if (ghost) { this.sendGhost(); this.addFx('skull', { pos: e.pos }, 0.6); } // 亡霊が出る即死：倒れた場所に一瞬どくろ（表示だけ）
     this.emit('instaKill', { enemy: e, die: d, ghost });
   }
@@ -1500,6 +1540,7 @@ class Game {
     this.pending = this.pending.filter(p => !p.src || (p.src.alive && p.src !== b));
     this.emit('bossDone', { boss: b, how, sp: g });
     if (BOSSES[this.bossType].onDone) BOSSES[this.bossType].onDone(this, b, how);
+    if (how === 'kill') this.enrageDeath(b); // 狂暴化：倒れたときの能力（4.1.0〜）
     if (this.life <= 0) { this.gameOver(); return; }
     this.boss = null;
     // ボスウェーブ中に出たモンスター（召喚・手下・テレポートの放出）がすべていなくなってから次のウェーブ
@@ -1551,11 +1592,14 @@ class Game {
     const v = c.bulletSpeed > 0 ? c.bulletSpeed : 1e9;
     const shot = { at: this.t + Math.hypot(ex - x, ey - y) / v, tgt, d, buf, crate: buf.crit, x, y };
     // ダイス固有の値（太陽の発射数・陰陽の列・コンボ数・炎の火力・台風の会心・過熱の段階）は発射時点で弾に持たせる
-    if (D.onFire && D.onFire(this, i, d, shot, tgt) === false) return false;
+    const fr = D.onFire ? D.onFire(this, i, d, shot, tgt) : undefined;
+    if (fr === false) return false;
+    if (fr === 'noShot') { this.emit('fire', { cell: i, die: d, shot: null }); return true; } // 弾を出さない攻撃（地震。4.0.0〜）
     this.shots.push(shot);
     this.emit('fire', { cell: i, die: d, shot });
     // スコープ：確率で、本来の対象以外の敵にも弾を撃つ（追加弾は会心率50%）
     if (buf.scope && this.rng() < buf.scope.p) {
+      this.addFx('scopeProc', { cell: i }, 0.05); // スコープのバフが発動したダイスに一瞬スコープ（表示だけ。3.14.0〜）
       const others = this.shuffle(this.alive().filter(e => e !== tgt)).slice(0, buf.scope.pips);
       for (const e of others) {
         const [qx, qy] = this.posXY(e.pos);
@@ -1572,10 +1616,18 @@ class Game {
     let atk = this.baseAtk(d.type, d);
     if (D.modifyAtk) atk = D.modifyAtk(this, s, atk);
     atk *= 1 + buf.atk; // 月の活性攻撃力（他バフ）
+    if (buf.bmAtk > 1) atk *= buf.bmAtk; // ブラッドムーンの活性：攻撃力×ブラッドムーンの出目（4.3.1〜）
     atk = this.filter('atk', atk, s);
     this.hit(tgt, atk, s.crate, d, D.critMul ? D.critMul(this, s) : 1);
     if (D.afterHit) D.afterHit(this, s, atk);
+    if (buf.bmSplash && !s.bmChild) this.bloodSplash(s, atk); // ブラッドムーンの活性：隣のダイスの弾にスプラッシュ（4.3.0〜）
     this.tryInstaKill(s); // 地獄・死の即死（2.0.0〜）
+  }
+  // ブラッドムーンのスプラッシュ（4.3.0〜、ユーザー指定）：当たった敵を中心に通路の位置で半径 r の敵へ、その弾の攻撃力×mul（会心は敵ごと）
+  bloodSplash(s, atk) {
+    const { tgt, d, buf } = s, B = buf.bmSplash; if (!B || !(B.r > 0)) return;
+    this.addFx('bmSplash', { pos: tgt.pos, r: B.r, die: d.id, type: d.type }, 0.2);
+    for (const e of this.enemies.slice()) if (e.alive && e !== tgt && Math.abs(e.pos - tgt.pos) <= B.r + e.d / 2) { this.hit(e, atk * B.mul, s.crate, d); if (this.over) return; }
   }
   // cmul：会心ダメージの追加倍率（過熱の段階。1なら従来どおり）
   hit(e, atk, crate, d, cmul) {
@@ -1797,6 +1849,7 @@ class Game {
       bossType: this.bossType, bossName: BOSSES[this.bossType].name,
       boss: this.bossObs(t), // ボス本体、または残っている先頭の分裂体（part:true）（2.5.3〜）
       deathWave: this.deathWaveOn(), // デスウェーブ中か（2.4.0〜）
+      enraged: this.enrageOn(), // ボスの狂暴化の状態か（v6.7.2〜。4.0.0〜。効果は未実装）
       // 予告中のスキル（ボスのハッキング・メテオ、相手の暗殺）。from：'boss' か 'opponent'
       pending: this.pending.map(p => ({ kind: p.kind, label: PENDING[p.kind].label, cells: p.cells.slice(),
         in: Math.max(0, p.at - t), srcId: p.src ? p.src.id : null, from: p.src ? 'boss' : 'opponent' })),
@@ -2173,7 +2226,7 @@ defineEnemy('boss',   { name: 'ボス', speed: 0.60, d: 1.12, life: 2, sp: 10, h
 defineEnemy('slime', { name: '分裂スライム', speed: 0.60, d: 0.95, life: 2, sp: 0, hpMul: 1, bossLike: true, bossPart: true, noSend: true,
   onKill(g, e) {
     const c = g.cfg;
-    if (c.slimeSpMul > 0) { const gain = g.fieldSP(c.killSpMul * g.wave * c.slimeSpMul); g.sp += gain; g.ws.spKill += gain; }
+    if (c.slimeSpMul > 0) { const gain = g.fieldSP(c.killSpMul * g.spWave() * c.slimeSpMul); g.sp += gain; g.ws.spKill += gain; }
     if (e.gen < c.slimeGens) BOSSES.slime.split(g, e, e.gen + 1);
   } });
 // スネークの召喚（v6.5.0〜）：スピードモンスター（現在HPの5%）（3.4.0〜）
@@ -2228,10 +2281,11 @@ defineBoss('snake', { name: 'スネーク', d: 1.11, cls: [1, 5], cd650: 10,
   skill(g, b, nm) {
     const c = g.cfg;
     if (g.boss650) {
-      const hp = Math.max(1, b.hp);
-      for (let k = 0; k < 2; k++) g.spawnEnemy('snake', hp * 0.1, minionOpts(b, { pos: Math.max(0, b.pos - 0.3 * (k + 1)) }));
-      g.spawnEnemy('snakeFast', hp * 0.05, minionOpts(b, { pos: Math.max(0, b.pos - 0.9) }));
-      g.note(`${nm}：通常2体（HP ${fmt(hp * 0.1)}）とスピード1体（HP ${fmt(hp * 0.05)}）を召喚`);
+      // 狂暴化（4.1.0〜、ユーザー指定）：召喚する敵のHP ×(1＋k×5%)、召喚する位置が k÷10 単位前へ（k＝ウェーブ−20）
+      const ek = Math.max(0, g.enrageK()), hp = Math.max(1, b.hp) * (1 + 0.05 * ek), fwd = ek / 10, P = x => Math.min(TRACK_LEN - 0.01, Math.max(0, x + fwd));
+      for (let k = 0; k < 2; k++) g.spawnEnemy('snake', hp * 0.1, minionOpts(b, { pos: P(b.pos - 0.3 * (k + 1)) }));
+      g.spawnEnemy('snakeFast', hp * 0.05, minionOpts(b, { pos: P(b.pos - 0.9) }));
+      g.note(`${nm}：通常2体（HP ${fmt(hp * 0.1)}）とスピード1体（HP ${fmt(hp * 0.05)}）を召喚${ek > 0 ? `（狂暴化：HP+${ek * 5}%・${fwd.toFixed(1)}前）` : ''}`);
       return;
     }
     for (let k = 0; k < c.snakeN; k++) g.spawnEnemy('snake', g.tableHP(g.wave, g.lastK), minionOpts(b, { pos: Math.max(0, b.pos - 0.3 * (k + 1)) }));
@@ -2244,8 +2298,9 @@ defineBoss('silence', { name: 'サイレント', d: 1.10, cls: [2, 7], cd650: 7,
     const c = g.cfg;
     if (g.skillBlocked()) { g.note(`プラズマ：${nm}の封印を無効`); return; }
     const ids = g.shuffle(g.diceCells().filter(i => !g.board[i].sealBoss));
-    ids.slice(0, c.silenceN).forEach(i => { if (g.bubbleBlock(g.board[i], nm)) return; g.board[i].sealBoss = true; g.sealUpdate(g.board[i]); });
-    g.note(`${nm}：${Math.min(c.silenceN, ids.length)}個封印`);
+    const n = c.silenceN + Math.floor(Math.max(0, g.enrageK()) / 2); // 狂暴化：(ウェーブ−20)÷2 個（切り捨て）を追加で封印（4.1.0〜）
+    ids.slice(0, n).forEach(i => { if (g.bubbleBlock(g.board[i], nm)) return; g.board[i].sealBoss = true; g.sealUpdate(g.board[i]); });
+    g.note(`${nm}：${Math.min(n, ids.length)}個封印`);
   } });
 defineBoss('knight', { name: 'ランダムナイト', d: 1.13, cls: [2, 99], cd650: 10,
   desc: '［変更］全てのダイスの種類をランダムに変える（v6.5.0〜：2秒後から10秒ごと）。',
@@ -2253,8 +2308,10 @@ defineBoss('knight', { name: 'ランダムナイト', d: 1.13, cls: [2, 99], cd6
     if (g.skillBlocked()) { g.note(`プラズマ：${nm}を無効`); return; }
     for (const i of g.diceCells()) { const d = g.board[i]; if (g.bubbleBlock(d, nm)) continue; g.onRemoved(d, 'info'); g.board[i] = g.newDie(g.deckPick(), d.pips); }
     g.note(`${nm}：全ダイスの種類が変わった`);
-  } });
+  },
+  onEnragedDeath(g, b, nm) { this.skill(g, b, nm); } }); // 狂暴化：倒れたときにスキルを追加で使う（4.1.0〜）
 defineBoss('magician', { name: 'マジシャン', d: 1.12, cls: [6, 14], cd650: 5,
+  enrageGuard: 'meteor', // 狂暴化：メテオの予告中は受けるダメージ −k×5%（4.1.0〜。回復量の増加は数値が未定のため未実装）
   desc: '［メテオ］（予告マスのダイス1個を破壊）と［再生］（v6.5.0〜：最大HPの20%回復。v6.0.5：15%）を順番に使う（v6.5.0〜：2秒後から5秒ごと）。',
   params: { meteorN: { def: 1, label: 'メテオ破壊数' }, meteorDelay: { def: 2, label: 'メテオ予告から着弾まで(秒)', step: 0.1 },
     magicHeal: { def: 0.15, label: 'マジシャン回復（最大HP比。v6.0.5。v6.5.0〜は20%）', step: 0.05 } },
@@ -2282,19 +2339,28 @@ defineBoss('leon', { name: 'レオン', d: 1.27, cls: [8, 99], cd650: 5,
       }
       b.pos = to; g.note(blocked ? `${nm}：突進（盾で止まった）` : `${nm}：突進`); return;
     }
+    this.roar(g, nm);
+  },
+  // 咆哮：盤面のダイスの半分の出目−1。狂暴化（4.1.0〜）：個数と下がる出目が (ウェーブ−20)÷10（切り捨て）ずつ増える
+  roar(g, nm) {
     if (g.skillBlocked()) { g.note(`プラズマ：${nm}の咆哮を無効`); return; }
-    const ids = g.shuffle(g.diceCells()); const n = Math.floor(ids.length / 2);
-    for (let k = 0; k < n; k++) if (!g.bubbleBlock(g.board[ids[k]], `${nm}の咆哮`)) g.reducePips(ids[k]);
-    g.note(`${nm}：咆哮で${n}個の出目−1`);
-  } });
+    const add = Math.floor(Math.max(0, g.enrageK()) / 10), ids = g.shuffle(g.diceCells());
+    const n = Math.min(ids.length, Math.floor(ids.length / 2) + add), down = 1 + add;
+    for (let k = 0; k < n; k++) { if (g.bubbleBlock(g.board[ids[k]], `${nm}の咆哮`)) continue; for (let j = 0; j < down; j++) g.reducePips(ids[k]); }
+    g.note(`${nm}：咆哮で${n}個の出目−${down}`);
+  },
+  onEnragedDeath(g, b, nm) { this.roar(g, nm); } }); // 狂暴化：倒れたときも咆哮（4.1.0〜）
 defineBoss('hacker', { name: 'IIIIIIIIII', d: 1.16, cls: [10, 99],
   desc: '［ハッキング］ランダムなダイス2個をハッキング（予告から3秒後に効く。ボスを倒すと解ける）。ハッキングされたダイスの攻撃は対象を回復させる（v6.5.0〜：基礎攻撃力の分。v6.0.5：与えるはずのダメージの分）。2秒後に予告、10秒ごと。',
   params: { hackN: { def: 2, label: 'ハッキング数' }, hackFirst: { def: 5 }, hackCd: { def: 10 } },
   // ハッキングされたダイスの攻撃は敵の回復になる（d.hacked。ダメージ計算の本体が見る）
-  effects: { hack: { init(d) { d.hacked = false; }, onBossDone(g, d) { d.hacked = false; },
+  enrageGuard: 'hack', // 狂暴化：ハッキングの予告中は受けるダメージ −k×5%（4.1.0〜）
+  // 狂暴化中のハッキングは永続（ボスを倒しても解けない。d.hackPerm。4.1.0〜）
+  effects: { hack: { init(d) { d.hacked = false; d.hackPerm = false; }, onBossDone(g, d) { if (!d.hackPerm) d.hacked = false; },
+    carry(g, a, b) { if (a.hackPerm) { b.hacked = true; b.hackPerm = true; } },
     str: d => d.hacked ? '侵' : '', digest: d => d.hacked ? 'h' : '', observe(g, d, o) { o.hacked = !!d.hacked; } } },
   pendings: { hack: { label: 'ハッキング', done: 'ハッキング', mark: '侵入', color: '#ff3b3b', fill: 'rgba(255,59,59,.25)',
-    apply(g, d) { d.hacked = true; } } },
+    apply(g, d) { d.hacked = true; if (g.enrageK() >= 0) d.hackPerm = true; } } },
   cd: c => c.hackCd,
   skill(g, b, nm) {
     const c = g.cfg;
@@ -2331,7 +2397,7 @@ defineBoss('slime', { name: 'スライム', d: 1.12, cls: [7, 99], since: '6.5.0
   // 倒れた敵 p の場所に、世代 gen の分裂体を出す
   //   kind：分裂体の敵の種類（ボスウェーブのスライムは 'slime'、相手の転移で来たスライムは 'tslime'。3.4.0〜）
   split(g, p, gen, kind) {
-    const c = g.cfg, n = c.slimeN, hp = p.maxHp * c.slimeHpPct;
+    const c = g.cfg, n = c.slimeN + Math.floor(Math.max(0, g.enrageK()) / 10), hp = p.maxHp * c.slimeHpPct; // 狂暴化：分裂数 +(ウェーブ−20)÷10（切り捨て。4.1.0〜）
     if (!(n > 0) || !(hp > 0)) return;
     for (let k = 0; k < n; k++)
       g.spawnEnemy(kind || 'slime', hp, Object.assign({ pos: Math.max(0, p.pos - c.slimeGap * k), speed: p.speed * c.slimeSpeedMul, d: Math.max(0.5, p.d * 0.85), bossType: 'slime', gen, spawnT: p.spawnT }, p.marked ? { marked: true } : {}));
@@ -2549,7 +2615,7 @@ defineDice('sun', { name: '太陽', rar: 'L', color: '#f08a1c', atk: [35, 5, 11]
     for (const e of g.enemies) if (e.alive && e !== tgt && Math.abs(e.pos - tgt.pos) <= rad + e.d / 2) g.hit(e, sp, buf.crit, d);
   } });
 
-defineDice('combo', { name: 'コンボ', rar: 'L', color: '#b23d9e', atk: [10, 10, 10], spd: [1.2, 0], D: [8, 2, 1],
+defineDice('combo', { name: 'コンボ', rar: 'L', until: '6.7.2', color: '#b23d9e', atk: [10, 10, 10], spd: [1.2, 0], D: [8, 2, 1],
   desc: '前方。合成するたびにコンボ数が増え、コンボ数に応じた追加ダメージが乗る。',
   onFire(g, i, d, shot) { shot.comboN = g.combo; }, // コンボ数は発射時点の値
   modifyAtk(g, s, atk) { const Dv = g.stat('combo', 'D'), n = s.comboN; return atk + Dv * n * (n + 1) / 2; },
@@ -2597,10 +2663,13 @@ defineDice('yinyang_650', { name: '陰陽', rar: 'L', color: '#d8443c', atk: [50
 defineDice('atom', { name: '原子', rar: 'L', color: '#8c4bd6', atk: [35, 5, 30], spd: [0.8, 0], pct: [0.04, 0, 0.005], period: [6.2, 0, -0.8], until: '6.5.0',
   desc: '前方。一定時間ごとに、周囲（半径1.3）の敵へ現在HPの割合ダメージ。封印・沈黙中も回る。',
   init(g, d) { d.atomT = 0; },
-  observe(g, d) { return { nextPulseIn: g.stat(d.type, 'period') / d.pips - d.atomT }; },
+  // 回転周期（出目1・秒）と半径。特性「大きい原子」（6.7.2〜。4.2.0〜）はPU1の周期が period0、半径が rangeMul 倍
+  atomPeriod(g, type) { const T = g.trait(type), P = DICE[type].period; return T && T.period0 != null ? T.period0 + P[2] * (g.lv(type) - 1) : g.stat(type, 'period'); },
+  atomRange(g, type) { const T = g.trait(type); return 1.3 * (T && T.rangeMul || 1); },
+  observe(g, d) { return { nextPulseIn: this.atomPeriod(g, d.type) / d.pips - d.atomT, range: this.atomRange(g, d.type) }; },
   // 原子（沈黙中も回る）
   tickAlways(g, i, d, dt) {
-    const per = g.stat(d.type, 'period') / d.pips;
+    const per = this.atomPeriod(g, d.type) / d.pips, rng = this.atomRange(g, d.type);
     d.atomT += dt;
     while (d.atomT >= per) {
       d.atomT -= per;
@@ -2608,7 +2677,7 @@ defineDice('atom', { name: '原子', rar: 'L', color: '#8c4bd6', atk: [35, 5, 30
       for (const e of g.enemies) {
         if (!e.alive) continue;
         const [ex, ey] = g.posXY(e.pos);
-        if (Math.hypot(ex - x, ey - y) <= 1.3 + e.d / 2) {
+        if (Math.hypot(ex - x, ey - y) <= rng + e.d / 2) {
           const amt = e.hp * pct;
           g.damage(e, amt, g.isHacked(d) ? null : d);
           g.emit('atomHit', { enemy: e, amount: amt, die: d, cell: i }); // 表示用（ダメージ表示）。状態は変えない
@@ -2619,7 +2688,10 @@ defineDice('atom', { name: '原子', rar: 'L', color: '#8c4bd6', atk: [35, 5, 30
 // 原子（6.5.0）（3.5.0〜、ユーザーのスクリーンショットから）：クラス10で 攻撃力95（クラス+20・PU+30）・現在HPの4.9%（クラス+0.3%・PU+0.5%）・
 //   回転速度5.7秒（PU−1秒。クラスでは変わらない）。回転・当たり方は 6.0.5 の原子と同じ（回転速度÷出目 秒ごとに周囲へ）
 defineDice('atom_650', Object.assign({}, DICE.atom, { atk: [35, 20, 30], pct: [0.04, 0.003, 0.005], period: [5.7, 0, -1.0],
-  id: 'atom_650', since: '6.5.0', until: undefined, family: 'atom' }));
+  id: 'atom_650', since: '6.5.0', until: undefined, family: 'atom',
+  // 特性「大きい原子」（6.7.2〜。4.2.0〜、ユーザー指定）：原子の半径が1.5倍（二列目・二行目のダイスからもモンスターに届く）。かわりにPU1の回転周期が6秒（PUごとの−1秒は同じ）
+  traits: { big: { id: 'big', name: '大きい原子', since: '6.7.2', rangeMul: 1.5, period0: 6.0,
+    desc: '原子の半径が1.5倍（二列目・二行目からも届く）。かわりにPU1の回転周期が6秒。' } } }));
 defineDice('blizzard', { name: '吹雪', rar: 'L', color: '#9fd3f0', atk: [30, 5, 20], spd: [1.0, 0], slow: [0.05, 0.005, 0], slowPU: 0.01, every: 7,
   desc: '前方。7秒ごとに通路の敵すべてを減速（重なる。減速の合計は上限50%）。',
   // 特性（6.6.5〜。3.8.0〜、ユーザー指定）：早い寒波。減速が半分になるかわりに、吹雪が関わる重ねる操作（合成・コピーなど）のたびに
@@ -2726,7 +2798,7 @@ defineDice('royal',    { name: 'ロイヤル', rar: 'L', color: '#c79a2a', atk: 
   strike(g, o, n) {
     const k = n + Math.floor(g.rng() * (n + 1));
     const vs = g.shuffle(o.diceCells()).slice(0, k);
-    for (const i of vs) { const d = o.board[i]; if (o.bubbleBlock(d, '相手のロイヤル')) continue; o.onRemoved(d, 'info'); o.board[i] = o.newDie(o.deckPick(g), d.pips); }
+    for (const i of vs) { const d = o.board[i]; if (o.bubbleBlock(d, '相手のロイヤル')) continue; o.onRemoved(d, 'info'); o.board[i] = o.newDie(o.deckPick(g), d.pips); o.addFx('royalHit', { cell: i }, 0.5); } // 変換されたマスに照準 0.5秒（表示だけ。3.14.0〜、3.14.2〜 0.5秒）
     g.note(`ロイヤル → 相手${vs.length}個の種類を変更（抽選${k}）`);
     o.note(`相手のロイヤル：${vs.length}個の種類が変わった`);
   } });
@@ -2828,7 +2900,7 @@ defineDice('ix10', { name: 'ix10', rar: 'L', color: '#c4303e', atk: [50, 10, 20]
     o.note(`相手のix10：${o.cellName(i)}がハッキングされた`);
   } });
 // フロー：攻撃しない。盤面のフローの出目に応じて、相手トラックの敵を加速する（上限+1000%）
-defineDice('flow',     { name: 'フロー', rar: 'L', color: '#4fa3d9', buff: true, opp: true, fl: [0.05, 0.005, 0], flPU: 0.01,
+defineDice('flow',     { name: 'フロー', rar: 'L', until: '6.7.2', color: '#4fa3d9', buff: true, opp: true, fl: [0.05, 0.005, 0], flPU: 0.01,
   desc: '攻撃しない。盤面のフローの出目の合計に応じて、相手トラックの敵を加速する（上限+1000%）。対戦のみ。',
   // この盤面のフローが相手トラックに与える加速（1.0＝+100%。上限10＝+1000%）。沈黙中のフローは数えない
   oppSpeed(g) {
@@ -2866,12 +2938,12 @@ defineDice('lightsword', { name: '光の剣', rar: 'L', color: '#4fb4e6', atk: [
     observe(g, d, o) { if (d.celestial) o.celestial = true; }, publicObserve(d, o) { if (d.celestial) o.celestial = true; } } },
   observe(g, d) { return { celestial: !!d.celestial, nextIn: d.celestial ? Math.max(0, d.cswNext - g.t) : null }; },
   // 光の剣・天上の剣の効果（雑魚は現在HPの50%、ボス扱いは現在HP×ボスへの割合）
-  sword(g, e, d) { const amt = g.isBossLike(e) ? e.hp * g.stat('lightsword', 'bossPct') : e.hp * 0.5; g.damage(e, amt, d); },
+  sword(g, e, d, lane) { const amt = g.isBossLike(e) ? e.hp * g.stat('lightsword', 'bossPct') : e.hp * 0.5; g.damage(e, amt, d); g.emit('pctHit', { enemy: e, amount: amt, die: d, lane: lane || 0, src: 'lightsword' }); }, // pctHit：割合ダメージの表示用（3.15.2〜。表示だけ）
   afterHit(g, s) {
     const tgt = s.tgt;
     if (tgt.alive && g.rng() < g.stat('lightsword', 'prob')) {
       g.addFx('lsword', { pos: tgt.pos, eid: tgt.id }, 0.35); // 青い半透明の剣（3.6.0〜）
-      this.sword(g, tgt, s.d);
+      this.sword(g, tgt, s.d, 1); // 弾のダメージの数字を消さないよう2段目に
     }
   },
   // 天上の剣（封印・沈黙中は止まる）
@@ -2888,6 +2960,200 @@ defineDice('lightsword', { name: '光の剣', rar: 'L', color: '#4fb4e6', atk: [
       if (g.over) break;
     }
   } });
+
+// 強化歯車（EX。3.14.0〜、ユーザー指定）：総合環境（複合）だけ・クラス15限定。攻撃力100（PU+100）、2.0秒、前方
+//   「接続数」n＝上下左右でつながっている歯車の塊の大きさ−1（自分以外の歯車の数）。攻撃速度 4.0秒（3.14.2〜）
+//   ・自バフ：攻撃力 ＋基本攻撃力×0.5×n、攻撃回数 ×(1＋0.3×n)（月などの攻撃速度バフとは別枠）
+//   ・上下の両方に歯車がある中央の歯車は、攻撃のたびに50%で、ランダムな敵へ n 回の追加攻撃（1発ごとに抽選。3.14.1〜。両方は 3.14.2〜）
+//   ・左右の両方に歯車がある中央の歯車は、当たるたびに対象の現在HPの 1.15^n % の割合ダメージ（両方は 3.14.2〜、1.15^n は 3.15.1〜）。活性の歯車だけ (1+0.01n)^r %、ボス扱いには (1+0.01n)^r − 0.5 %（r＝出目。3.15.3〜）
+//   ・塊が8個以上の間、塊の中の1つ（ランダム）が活性：対象がランダム、さらに攻撃力 ×1.5^n・攻撃回数 ×1.2^n（3.14.1〜。3.14.0 は 1.3^n）
+//     活性は、活性の歯車を同じ塊の別の歯車にドラッグして移せる（同じ出目でも合成しない）。活性の歯車が盤面から消えたら選び直す
+function gearCells(g) { const out = []; for (let i = 0; i < 15; i++) { const d = g.board[i]; if (d && d.type === 'gear') out.push(i); } return out; }
+function gearUpdate(g) {
+  const cells = gearCells(g), seen = new Set();
+  for (const i0 of cells) {
+    if (seen.has(i0)) continue;
+    const grp = [], q = [i0]; seen.add(i0);
+    while (q.length) { const i = q.shift(); grp.push(i); for (const j of g.neighbors(i)) { const d = g.board[j]; if (d && d.type === 'gear' && !seen.has(j)) { seen.add(j); q.push(j); } } }
+    grp.sort((a, b) => a - b);
+    for (const i of grp) {
+      const d = g.board[i], [r, c] = g.rc(i), isG = j => { const e = g.board[j]; return !!(e && e.type === 'gear'); };
+      d.gearN = grp.length - 1; d.gearGrp = grp[0]; d.gearSize = grp.length;
+      // 3.14.2〜：上下の両方（左右の両方）に歯車がある「中央の歯車」だけ（3.14.1 までは片方でよかった）
+      d.gearV = r > 0 && r < 2 && isG(i - 5) && isG(i + 5);
+      d.gearH = c > 0 && c < 4 && isG(i - 1) && isG(i + 1);
+    }
+    const ds = grp.map(i => g.board[i]);
+    if (grp.length >= 8) {
+      const act = ds.filter(d => d.gearAct);
+      if (!act.length) { const d = g.pick(ds); d.gearAct = true; g.note(`強化歯車：${grp.length}個つながり、1つが活性`); g.emit('gearActive', { cell: grp[ds.indexOf(d)], size: grp.length }); }
+      else for (const d of act.slice(1)) d.gearAct = false;
+    } else for (const d of ds) d.gearAct = false;
+  }
+}
+defineDice('gear', { name: '強化歯車', rar: 'L', ex: true, fixedClass: 15, color: '#7b8494', atk: [100, 0, 100], spd: [4.0, 0], // 攻撃速度 4.0秒（3.14.2〜。3.14.1 までは 2.0秒）
+  desc: 'EX（総合環境＝複合のみ）・クラス15限定。前方。つながった歯車の数だけ攻撃力と攻撃回数が上がる。上下の両方に歯車があると50%でランダムな敵へ追加攻撃、左右の両方に歯車があると現在HPの割合ダメージ。8個以上つながると1つが活性（対象ランダム・さらに倍率）。活性は同じ塊の歯車にドラッグで移せる。',
+  deckTick(g) { gearUpdate(g); },
+  baseAtk(g, d) { const b = g.stat('gear', 'atk'), n = d.gearN || 0; let a = b * (1 + 0.5 * n); if (d.gearAct) a *= Math.pow(1.5, n); return a; },
+  adjustInterval(g, i, d, iv) { const n = d.gearN || 0; iv /= 1 + 0.3 * n; if (d.gearAct) iv /= Math.pow(1.2, n); return iv; }, // 活性の乗算は 1.2^n（3.14.1〜。3.14.0 は 1.3^n）
+  selectTarget(g, i, d) { if (d.gearAct) { const a = g.alive(); return a.length ? g.pick(a) : null; } return g.first(); },
+  onFire(g, i, d, shot) {
+    const n = d.gearN || 0; shot.gearN = n; shot.gearH = !!d.gearH; shot.gearAct = !!d.gearAct; shot.gearPips = d.pips; // 割合ダメージは発射時点の活性・出目で（3.15.3〜）
+    if (d.gearV && n > 0 && g.rng() < 0.5) { // 追加攻撃：ランダムな敵へ n 発（1発ごとに抽選。3.14.1〜、ユーザー指定）
+      const v = g.cfg.bulletSpeed > 0 ? g.cfg.bulletSpeed : 1e9;
+      for (let k = 0; k < n; k++) { const al = g.alive(); if (!al.length) break; const e = g.pick(al), [qx, qy] = g.posXY(e.pos);
+        g.shots.push(Object.assign({}, shot, { extra: true, tgt: e, at: g.t + Math.hypot(qx - shot.x, qy - shot.y) / v })); }
+      g.addFx('scopeProc', { cell: i }, 0.05); g.emit('gearExtra', { cell: i, n });
+    }
+  },
+  afterHit(g, s) {
+    if (!s.gearH || !(s.gearN > 0) || !s.tgt.alive) return;
+    g.addFx('gearHit', { pos: s.tgt.pos, eid: s.tgt.id }, 0.35);
+    // 割合（%）：通常は 1.15^n。活性の歯車だけ (1+0.01n)^r、ボス扱いには (1+0.01n)^r − 0.5（r＝出目。3.15.3〜、ユーザー指定）
+    const pct = s.gearAct ? Math.pow(1 + 0.01 * s.gearN, s.gearPips) - (g.isBossLike(s.tgt) ? 0.5 : 0) : Math.pow(1.15, s.gearN);
+    const amt = s.tgt.hp * 0.01 * pct; g.damage(s.tgt, amt, s.d);
+    g.emit('pctHit', { enemy: s.tgt, amount: amt, die: s.d, lane: 1, src: 'gear' }); // 表示用（3.15.2〜）
+  },
+  actions: [{ id: 'gearMove', order: 15, result: 'gearMove', label: '活性を移す', hint: '活性を移す', showFrom: true,
+    match: (g, a, b) => a.type === 'gear' && b.type === 'gear' && !!a.gearAct && !b.gearAct && a.gearGrp != null && a.gearGrp === b.gearGrp,
+    run(g, from, to, a, b) { a.gearAct = false; b.gearAct = true; g.note('強化歯車：活性を移した'); } }],
+  effects: { gearAct: { str: d => d.gearAct ? '活' : '', digest: d => d.gearAct ? 'a' : '',
+    observe(g, d, o) { if (d.gearAct) o.gearActive = true; }, publicObserve(d, o) { if (d.gearAct) o.gearActive = true; } } },
+  observe(g, d) { return { connected: d.gearN || 0, group: d.gearSize || 1, vertical: !!d.gearV, horizontal: !!d.gearH, active: !!d.gearAct }; } });
+
+// =====================================================================
+// v6.7.2（パーティーシーズン）で加わった・変わったダイス（4.0.0〜、ユーザー指定・スクリーンショット）
+// =====================================================================
+// コンボ（6.7.2）：基本攻撃力が強化（クラス10で80。クラス+10・PU+10）。1コンボあたりのダメージは同じ（クラス10で14。クラス+2・PU+1）
+defineDice('combo_672', Object.assign({}, DICE.combo, { id: 'combo_672', since: '6.7.2', until: undefined, family: 'combo', atk: [50, 10, 10],
+  modifyAtk(g, s, atk) { const Dv = g.stat('combo_672', 'D'), n = s.comboN; return atk + Dv * n * (n + 1) / 2; } }));
+// フロー（6.7.2）：加速が強化（クラス10で9.25%。クラス+0.75%・PU+2.5%）
+defineDice('flow_672', Object.assign({}, DICE.flow, { id: 'flow_672', since: '6.7.2', until: undefined, family: 'flow', fl: [0.07, 0.0075, 0], flPU: 0.025,
+  oppSpeed(g) {
+    let a = 0, n = 0;
+    for (const d of g.board) if (d && d.type === 'flow_672' && !d.sealed) { a += d.pips; n++; }
+    if (!n) return 0;
+    return Math.min(10, g.stat('flow_672', 'fl') * a + this.flPU * (g.lv('flow_672') - 1) * n);
+  } }));
+// 地震（伝説。6.7.2〜）：クラス9で 攻撃力100（PU+10）・攻撃速度9秒（クラス−0.5秒）・失ったHPに比例するダメージ6%（クラス+0.5%）・持続5秒（PU+0.5秒）。対象ランダム
+//   基本攻撃の代わりに、ランダムな敵の位置に［地震］。範囲はコロシアムの砂と同じ（通路の位置で中心±0.7。敵の体が少しでも入っていれば対象）。
+//   持続のあいだ 0.5秒ごと（2回/秒）に、範囲の敵へ 基本攻撃力×2^(出目−1) のダメージ（会心あり。撃った時点の攻撃力・会心率・攻撃力バフ）。
+//   地震が重なるとそれぞれがダメージを与える。範囲の敵は移動速度−30%（減速の項＝吹雪・氷などと足して上限50%。地震どうしは重ならない）。
+//   出目で地震の回数は増えない（間隔を出目で割らない）。
+//   合成すると［地ならし］：持続のあいだ、フィールドの敵すべての移動速度をさらに−30%（同じ減速の項。重ならず、持続を延ばす）、
+//   1秒ごとに 失ったHP（最大HP−現在HP）×割合 のダメージ（会心なし）
+function quakeState(g) { return g.vars.quake || (g.vars.quake = { list: [], levelUntil: -1, levelNext: 0, levelPct: 0 }); }
+defineDice('earthquake', { name: '地震', rar: 'L', since: '6.7.2', color: '#d4a63a', atk: [100, 0, 10], spd: [10, -0.5], pct: [0.05, 0.005, 0], dur: [5, 0, 0.5],
+  random: true, quakeR: 0.7, quakeEvery: 0.5, quakeSlow: 0.3, levelSlow: 0.3, levelEvery: 1,
+  desc: 'ランダムな敵の位置に地震（持続のあいだ2回/秒、範囲の敵に 攻撃力×2^(出目−1)、移動速度−30%）。合成すると地ならし（フィールド全体をさらに−30%、1秒ごとに失ったHPの割合ダメージ）。',
+  baseInterval(g, d) { return g.defaultBaseInterval(d.type) * d.pips; }, // 出目で回数は増えない
+  init(g, d) { d.quakeUntil = -1; },
+  onFire(g, i, d, shot, tgt) {
+    const Q = quakeState(g);
+    let atk = g.baseAtk(d.type, d) * Math.pow(2, d.pips - 1);
+    atk *= 1 + shot.buf.atk;
+    const until = g.t + g.stat(d.type, 'dur');
+    Q.list.push({ pos: tgt.pos, r: this.quakeR, until, next: g.t + this.quakeEvery, atk, crate: shot.crate, d, src: d.id });
+    d.quakeUntil = Math.max(d.quakeUntil, until);
+    g.emit('quake', { cell: i, pos: tgt.pos, until });
+    return 'noShot';
+  },
+  deckTick(g) {
+    const Q = g.vars.quake; if (!Q) return;
+    for (const q of Q.list) {
+      while (q.next <= q.until + 1e-9 && q.next <= g.t + 1e-9) {
+        q.next += this.quakeEvery;
+        for (const e of g.enemies.slice()) if (e.alive && Math.abs(e.pos - q.pos) <= q.r + e.d / 2) { g.hit(e, q.atk, q.crate, q.d); if (g.over) return; }
+      }
+    }
+    if (Q.list.length) Q.list = Q.list.filter(q => q.next <= q.until + 1e-9);
+    while (Q.levelNext <= Q.levelUntil + 1e-9 && Q.levelNext <= g.t + 1e-9) {
+      Q.levelNext += this.levelEvery;
+      for (const e of g.enemies.slice()) {
+        if (!e.alive) continue;
+        const amt = (e.maxHp - e.hp) * Q.levelPct; if (!(amt > 0)) continue;
+        g.damage(e, amt, null); g.emit('pctHit', { enemy: e, amount: amt, die: null, lane: 1, src: 'earthquake' });
+        if (g.over) return;
+      }
+    }
+  },
+  enemySlow(g, e) {
+    const Q = g.vars.quake; if (!Q) return 0;
+    let s = 0;
+    for (const q of Q.list) if (g.t < q.until && Math.abs(e.pos - q.pos) <= q.r + e.d / 2) { s = this.quakeSlow; break; }
+    if (g.t < Q.levelUntil) s += this.levelSlow;
+    return s;
+  },
+  onMerge(g, m) {
+    const Q = quakeState(g), id = this.id, until = g.t + g.stat(id, 'dur');
+    if (!(Q.levelUntil > g.t)) Q.levelNext = g.t + this.levelEvery; // 新しく始まるときは1秒後に1回目
+    Q.levelUntil = Math.max(Q.levelUntil, until); Q.levelPct = g.stat(id, 'pct');
+    g.addFx('quakeLevel', {}, 0.8); g.note(`地震：地ならし（${(until - g.t).toFixed(1)}秒）`); g.emit('quakeLevel', { until });
+  },
+  observe(g, d) { const Q = g.vars.quake; return { quakes: Q ? Q.list.filter(q => q.src === d.id).length : 0, leveling: Q ? Math.max(0, Q.levelUntil - g.t) : 0 }; } });
+
+// 雪玉（英雄。6.7.2〜）：クラス13で 攻撃力210（クラス+20）・攻撃速度1.6秒（クラス−0.05秒）・移動速度減少5.5%（PU+0.5%）。対象ランダム
+//   当たった敵に［雪玉］を1つ（最大4つ）。1つあたりの減速＝減少率×出目（減速の項＝吹雪・氷などと足して上限50%。値は大きいほう）。
+//   4つ目が付いたとき爆発：核と同じ範囲（半径 cfg.nukeR の円）の敵を0.5秒停止（水晶・早い寒波と同じ。ボスはスキルも止まる）し、
+//   ほかの敵に雪玉を1つ付ける（これで4つになっても爆発しない）。爆発した敵の雪玉は4つのまま（それ以降の命中では爆発しない）
+defineDice('snowball', { name: '雪玉', rar: 'H', since: '6.7.2', color: '#8fcfe6', atk: [50, 20, 0], spd: [2.0, -0.05], slow: [0.055, 0, 0.005],
+  random: true, maxStack: 4, stopDur: 0.5,
+  desc: 'ランダム。当たった敵に雪玉（最大4つ。1つで 減少率×出目 の減速）。4つで爆発し、核と同じ範囲の敵を0.5秒停止させ雪玉を1つ付ける。',
+  enemyInit(g, e) { e.snow = 0; e.snowVal = 0; },
+  enemySlow(g, e) { return (e.snow || 0) * (e.snowVal || 0); },
+  enemyObserve(g, e, o) { o.snow = e.snow || 0; },
+  onFire(g, i, d, shot) { shot.snowV = g.stat(d.type, 'slow') * d.pips; },
+  afterHit(g, s) {
+    const t = s.tgt; if (!t.alive || (t.snow || 0) >= this.maxStack) return;
+    t.snow = (t.snow || 0) + 1; t.snowVal = Math.max(t.snowVal || 0, s.snowV || 0);
+    if (t.snow < this.maxStack) return;
+    const R = g.cfg.nukeR || 2.4, [cx, cy] = g.posXY(t.pos);
+    g.addFx('snowBurst', { pos: t.pos, r: R }, 0.5);
+    for (const e of g.enemies) {
+      if (!e.alive) continue;
+      const [x, y] = g.posXY(e.pos); if (Math.hypot(x - cx, y - cy) > R) continue;
+      g.freezeEnemy(e, this.stopDur, true);
+      if (e !== t && (e.snow || 0) < this.maxStack) { e.snow = (e.snow || 0) + 1; e.snowVal = Math.max(e.snowVal || 0, s.snowV || 0); }
+    }
+    g.emit('snowBurst', { pos: t.pos });
+  } });
+
+// ブラッドムーン（EX。4.3.0〜、ユーザー指定）：総合環境（複合）だけ。伝説・クラス10〜（自由）。攻撃しない。
+//   上下左右のダイスの攻撃回数を ×(1×出目) にする（4.3.2〜。4.3.1 までは ×(1＋出目)）。月の攻撃速度バフと比べて大きいほうだけが効く（攻撃速度の割合 1−1/倍率 に直して同じ欄で最大）。
+//   盤面のブラッドムーンが2・3・5個で活性：倍率が ×(1＋クラス÷20)×出目 に変わり（4.3.2〜）、隣のダイスの弾がスプラッシュ
+//   （当たった敵を中心に半径＝PU5で1.5〔太陽の最大〕、PUが1つ減るごとに半分。ダメージはその弾の攻撃力×(1＋出目×0.1)、会心は敵ごと）
+//   活性中は隣のダイスの攻撃力も ×ブラッドムーンの出目（4.3.1〜。スプラッシュもこの攻撃力から）
+defineDice('bloodmoon', { name: 'ブラッドムーン', rar: 'L', ex: true, classMin: 10, color: '#e0707a', buff: true, activeCounts: [2, 3, 5], activeGlow: '255,110,120',
+  desc: 'EX（複合のみ）。攻撃しない。上下左右のダイスの攻撃回数を×出目（月と比べて大きいほう）。2・3・5個で活性：×(1＋クラス÷20)×出目になり、隣の攻撃力×出目、隣の弾がスプラッシュ（PU5で半径1.5、PU−1ごとに半分。ダメージ×(1＋出目×0.1)）。',
+  auraTo(g, n, j, i, acc) {
+    const act = g.isActive(n.type), mult = (act ? 1 + g.cls(n.type) / 20 : 1) * n.pips; // 攻撃回数の倍率：非活性 1×出目、活性 (1＋クラス÷20)×出目（4.3.2〜、ユーザー指定）
+    acc.spd = Math.max(acc.spd, mult > 1 ? 1 - 1 / mult : 0); // 攻撃回数×mult ＝ 攻撃間隔×(1−spd)
+    if (act) {
+      acc.bmAtk = Math.max(acc.bmAtk || 1, n.pips); // 活性：隣のダイスの攻撃力×出目（隣に複数あれば大きいほう。4.3.1〜、ユーザー指定）
+      const r = 1.5 / Math.pow(2, 5 - Math.min(5, g.lv(n.type))), mul = 1 + 0.1 * n.pips, B = acc.bmSplash;
+      if (!B || mul > B.mul || (mul === B.mul && r > B.r)) acc.bmSplash = { r, mul };
+    }
+  },
+  observe(g, d) { const act = g.isActive(d.type); return { atkMul: act ? d.pips : 1, mult: (act ? 1 + g.cls(d.type) / 20 : 1) * d.pips, splashR: act ? 1.5 / Math.pow(2, 5 - Math.min(5, g.lv(d.type))) : 0 }; } });
+
+// シリウス（EX。4.3.0〜、ユーザー指定）：総合環境（複合）だけ。伝説・クラス10〜（自由）。攻撃力 クラス10で100（クラス+10・PU+100）、1.2秒、前方。
+//   同じ敵を2回攻撃するたびに、攻撃力が基本攻撃力の50%ずつ増える（1・2発目は+0、3・4発目は+50%…。狙う敵が変わったら0から。撃った時点の回数）。
+//   盤面のシリウスが3・5・8個で活性：攻撃速度2倍。ボス・中ボス（ボス扱い）に当たるたび、現在HPの (その敵への攻撃回数−1)×0.1% の割合ダメージ（1発目は0%）
+defineDice('sirius', { name: 'シリウス', rar: 'L', ex: true, classMin: 10, color: '#3d86e8', atk: [70, 10, 100], spd: [1.2, 0], activeCounts: [3, 5, 8], activeGlow: '80,160,255',
+  desc: 'EX（複合のみ）。前方。同じ敵を2回攻撃するたびに攻撃力+50%（基本攻撃力の）。3・5・8個で活性：攻撃速度2倍、ボス・中ボスに当たるたび現在HPの（攻撃回数×0.1%）の割合ダメージ。',
+  init(g, d) { d.sirT = -1; d.sirM = 0; },
+  adjustInterval(g, i, d, iv) { return g.isActive(d.type) ? iv / 2 : iv; },
+  onFire(g, i, d, shot, tgt) {
+    if (d.sirT !== tgt.id) { d.sirT = tgt.id; d.sirM = 0; }
+    shot.sirM = ++d.sirM; shot.sirAct = g.isActive(d.type);
+  },
+  modifyAtk(g, s, atk) { return atk * (1 + 0.5 * Math.floor(((s.sirM || 1) - 1) / 2)); },
+  afterHit(g, s) {
+    if (!s.sirAct || !s.tgt.alive || !g.isBossLike(s.tgt)) return;
+    const p = 0.001 * ((s.sirM || 1) - 1); if (!(p > 0)) return;
+    const amt = s.tgt.hp * p; g.damage(s.tgt, amt, s.d); g.emit('pctHit', { enemy: s.tgt, amount: amt, die: s.d, lane: 1, src: 'sirius' });
+  },
+  observe(g, d) { return { count: d.sirM, atkUp: 0.5 * Math.floor(Math.max(0, d.sirM) / 2) }; } });
 
 defineDice('sacrifice', { name: '生贄', rar: 'R', color: '#21aeb0', atk: [10, 10, 10], spd: [1.0, 0],
   desc: '前方。合成・消滅すると 80×出目 のSPが入る。',
@@ -3147,7 +3413,7 @@ defineDice('absorb', { name: '吸収', rar: 'H', color: '#d23a3a', atk: [30, 0, 
   enemyObserve(g, e, o) { o.absorb = e.absorb ? { next: Math.max(0, e.absorb.next - g.t), amount: Math.max(1, Math.ceil(e.absorb.cur - 1e-9)), max: e.absorb.max } : null; } });
 
 //   v6.5.0 の死（ID 'death'。2.0.0 からの死はこちら）。v6.0.5 の死は下の 'death_605'（3.2.1〜）
-defineDice('death', { name: '死', rar: 'H', since: '6.5.0', color: '#2e2e34', atk: [20, 4, 20], spd: [1.2, 0], random: true, opp: true,
+defineDice('death', { name: '死', rar: 'H', since: '6.5.0', until: '6.7.2', color: '#2e2e34', atk: [20, 4, 20], spd: [1.2, 0], random: true, opp: true,
   desc: 'ランダム。弾が当たるたび 5.0%（クラス+0.2%、PU+0.5%）で即死（通常・高速など。中ボス・ボスは対象外）。即死は撃破と同じ送り込みに加えて、相手に亡霊を1体送る。',
   kill: [0.05, 0.002, 0.005],
   instaP(g) { return g.stat('death', 'kill'); } });
@@ -3160,10 +3426,18 @@ defineDice('death_605', { name: '死', rar: 'H', since: '6.0.5', until: '6.5.0',
 
 // 地獄（シーズン4）：攻撃しない。上下左右のダイスの基本攻撃弾に即死を付ける。確率＝{6.5%＋0.5%×(クラス−10)＋0.5%×(Lv−1)}×地獄の出目。
 //   重ならない（隣接する地獄のうち高いほう）。初期クラスは提示なしのため伝説（7）とした（△）
-defineDice('hell', { name: '地獄', rar: 'L', since: '6.5.0', color: '#565a64', buff: true, opp: true, kill: [0.05, 0.005, 0.005],
+defineDice('hell', { name: '地獄', rar: 'L', since: '6.5.0', until: '6.7.2', color: '#565a64', buff: true, opp: true, kill: [0.05, 0.005, 0.005],
   desc: '攻撃しない。上下左右のダイスの弾に即死を付ける（クラス10・PU1で6.5%、クラス+0.5%、PU+0.5%、×地獄の出目）。重ならず高いほう。死のダイスが受けたときは死の判定と独立に両方を判定（△）。',
   buffs: { hell: { zero: 0, insta: true } },   // 隣のダイスの弾に付く即死確率
   auraTo(g, n, j, i, acc) { acc.hell = Math.max(acc.hell || 0, Math.min(1, g.stat('hell', 'kill') * n.pips)); } });
+// 死・地獄（6.7.2）：即死で亡霊が出るとき（通常ウェーブ・出現の演出中）、その撃破のSPが70%（instaSpMul・隣接バフ hellSp）
+defineDice('death_672', Object.assign({}, DICE.death, { id: 'death_672', since: '6.7.2', until: undefined, family: 'death', instaSpMul: 0.7,
+  desc: DICE.death.desc + '（6.7.2：亡霊が出る即死のSPは70%）',
+  instaP(g) { return g.stat('death_672', 'kill'); } }));
+defineDice('hell_672', Object.assign({}, DICE.hell, { id: 'hell_672', since: '6.7.2', until: undefined, family: 'hell',
+  desc: DICE.hell.desc + '（6.7.2：亡霊が出る即死のSPは70%）',
+  auraTo(g, n, j, i, acc) { acc.hell = Math.max(acc.hell || 0, Math.min(1, g.stat('hell_672', 'kill') * n.pips)); acc.hellSp = 0.7; } }));
+
 
 // 核（シーズン4）：合成（核同士・適応との合成）で、先頭の敵の位置を中心に半径 cfg.nukeR の円形の核爆発。
 //   範囲内のボス・中ボス以外は一撃で撃破（SP・送り込みは通常どおり）。ボス・中ボスには 最大HP×{20%＋2%×(クラス−7)}×合成前の出目
@@ -4105,6 +4379,16 @@ function swordFx(ctx, x, y, h, col, edge, a) {
   ctx.restore();
 }
 // 早い寒波（3.8.0〜）：通路全体に青白い冷気
+// 雪玉の爆発（核と同じ範囲の円。4.0.0〜）
+V('fx', 'snowBurst', { draw({ ctx, X, Y, S }, g, f, a) {
+  const [x, y] = g.posXY(f.pos), R = f.r * S, gr = ctx.createRadialGradient(X(x), Y(y), 0, X(x), Y(y), R);
+  gr.addColorStop(0, `rgba(255,255,255,${0.7 * a})`); gr.addColorStop(0.7, `rgba(180,225,250,${0.4 * a})`); gr.addColorStop(1, `rgba(120,190,235,${0.1 * a})`);
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(X(x), Y(y), R, 0, 7); ctx.fill(); ctx.strokeStyle = `rgba(90,160,215,${0.8 * a})`; ctx.lineWidth = 2; ctx.stroke(); } });
+// 地ならしの始まり（通路全体が一瞬茶色く波打つ。4.0.0〜）
+V('fx', 'quakeLevel', { draw({ ctx, X, Y, S }, g, f, a) {
+  const L = RD.TRACK_LEN || 12, pts = [0, 3.5, 8.5, L].map(d => g.posXY(d));
+  ctx.save(); ctx.strokeStyle = `rgba(160,95,30,${0.6 * a})`; ctx.lineWidth = 1.0 * S; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); ctx.restore(); } });
 V('fx', 'coldWave', { draw({ ctx, X, Y, S }, g, f, a) {
   const L = RD.TRACK_LEN || 12, pts = [0, 3.5, 8.5, L].map(d => g.posXY(d));
   ctx.save(); ctx.strokeStyle = `rgba(170,225,255,${0.55 * a})`; ctx.lineWidth = 0.9 * S; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -4145,6 +4429,18 @@ V('dice', 'sun', { c2: '#ffcf5a',
   glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.fillStyle=c; for(let k=0;k<8;k++){ const a=k*Math.PI/4; ctx.beginPath(); ctx.moveTo(x+Math.cos(a-0.22)*r*0.48,y+Math.sin(a-0.22)*r*0.48); ctx.lineTo(x+Math.cos(a)*r*0.98,y+Math.sin(a)*r*0.98); ctx.lineTo(x+Math.cos(a+0.22)*r*0.48,y+Math.sin(a+0.22)*r*0.48); ctx.fill(); } const g2=ctx.createRadialGradient(x,y-r*0.15,0,x,y,r*0.5); g2.addColorStop(0,c2); g2.addColorStop(1,c); ctx.fillStyle=g2; ctx.beginPath(); ctx.arc(x,y,r*0.5,0,7); ctx.fill(); },
   // 活性：橙の円弧が時計回りに回る
   active(p, g, d, px, py, s) { p.orbit(px, py, s, ['#ff8a1c', '#ffb347'], 1, 'comet', 2200); } });
+// ブラッドムーン（4.3.0〜）：月と同じ図案で薄赤。活性の三日月も赤
+V('dice', 'bloodmoon', Object.assign({}, RD.DICE.moon.view, { c2: '#ffd0d4', activeRim: '#d0404e', actPattern: { kind: 'moon', hue: 150 },
+  active(p, g, d, px, py, s) { p.orbit(px, py, s, ['#e8505e'], -1, 'crescent', 2600 / 0.6, 1.3); } }));
+// シリウス（4.3.0〜）：太陽と同じ図案で青。活性の円弧も青
+V('dice', 'sirius', Object.assign({}, RD.DICE.sun.view, { c2: '#bfe3ff', actPattern: { kind: 'sun', hue: 190 },
+  active(p, g, d, px, py, s) { p.orbit(px, py, s, ['#2f7fe8', '#7fc0ff'], 1, 'comet', 2200); } }));
+// ブラッドムーンのスプラッシュ：撃ったダイスの色（4.3.0〜）
+V('fx', 'bmSplash', { latestBy: 'die', draw({ ctx, X, Y, S }, g, f, a) {
+  const col = (RD.DICE[f.type] && RD.DICE[f.type].color) || '#e0707a', h = col.replace('#', ''), rgb = [0, 2, 4].map(k => parseInt(h.slice(k, k + 2), 16)).join(',');
+  const [x, y] = g.posXY(f.pos), R = (f.r + 0.2) * S, gr = ctx.createRadialGradient(X(x), Y(y), 0, X(x), Y(y), R);
+  gr.addColorStop(0, `rgba(${rgb},${0.5 * a})`); gr.addColorStop(0.75, `rgba(${rgb},${0.3 * a})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(X(x), Y(y), R, 0, 7); ctx.fill(); } });
 V('dice', 'combo', { c2: '#e8649b',
   glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.lineWidth=r*0.24; ctx.lineCap='round'; ctx.lineJoin='round'; [[-0.45,c2],[0.1,c]].forEach(([dx,col])=>{ ctx.strokeStyle=col; ctx.beginPath(); ctx.moveTo(x+(dx-0.25)*r,y-0.55*r); ctx.lineTo(x+(dx+0.3)*r,y); ctx.lineTo(x+(dx-0.25)*r,y+0.55*r); ctx.stroke(); }); },
   badge: g => String(g.combo),
@@ -4173,8 +4469,8 @@ V('dice', 'atom', { c2: '#e04ab0',
   glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.strokeStyle=c; ctx.lineWidth=r*0.12; for(let k=0;k<3;k++){ ctx.beginPath(); ctx.ellipse(x,y,r*0.85,r*0.32,k*Math.PI/3,0,7); ctx.stroke(); } ctx.fillStyle='#ffffff'; ctx.lineWidth=r*0.08; ctx.beginPath(); ctx.arc(x,y,r*0.16,0,7); ctx.fill(); ctx.stroke(); }, // 核は白（3.10.0〜）
   // 回転粒子：オタマジャクシ形（光る頭と、進む向きと逆に短く伸びて細くなる尾。尾は少し揺れる）
   overlay({ ctx, X, Y, S, g, d, cx, cy }) {
-    const per = g.stat(d.type, 'period'), R = 1.3 * S, ox = X(cx), oy = Y(cy);
-    const head = 0.085 * S, tailA = 0.45 / 1.3, N = 12; // 尾の長さ：円周に沿って約0.45単位
+    const AD = RD.DICE[d.type], rr = AD.atomRange ? AD.atomRange(g, d.type) : 1.3, per = AD.atomPeriod ? AD.atomPeriod(g, d.type) : g.stat(d.type, 'period'), R = rr * S, ox = X(cx), oy = Y(cy);
+    const head = 0.085 * S, tailA = 0.45 / rr, N = 12; // 尾の長さ：円周に沿って約0.45単位
     for (let k = 0; k < d.pips; k++) {
       const a0 = -2 * Math.PI * (g.t / per + k / d.pips); // 頭の位置（反時計回りに進む）
       const L = [], Rt = [];
@@ -4209,11 +4505,62 @@ V('dice', 'bubble', { c2: '#9fe6f5', rim: ['#7fd6e8', '#b6e3ff', '#f2b6e6', '#ff
     ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#2f5f9e'; ctx.lineWidth = r * 0.07; ctx.beginPath(); ctx.arc(x, y, r * 0.16, 0, 7); ctx.fill(); ctx.stroke(); } }); // 中心は白（3.10.0〜）
 // ix10（3.5.0〜）：赤い照準と、ずれた走査線
 V('dice', 'ix10', { c2: '#ff8a8a',
-  glyph(p, x, y, r, c) { const ctx = p.ctx; ctx.strokeStyle = c; ctx.lineWidth = r * 0.1;
-    ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, 7); ctx.stroke();
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.beginPath(); ctx.moveTo(x + dx * r * 0.35, y + dy * r * 0.35); ctx.lineTo(x + dx * r * 0.9, y + dy * r * 0.9); ctx.stroke(); }
-    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, r * 0.16, 0, 7); ctx.fill(); ctx.stroke(); // 中心は白（3.10.0〜）
-    ctx.fillStyle = 'rgba(196,48,62,.35)'; for (let k = 0; k < 3; k++) ctx.fillRect(x - r * (0.8 - k * 0.2), y - r * 0.5 + k * r * 0.4, r * (0.7 + k * 0.15), r * 0.09); } });
+  // ハッキングのダイス：にやりと笑う白い仮面（巻いたひげ・とがったあごひげ・つり上がった細い目）（3.14.0〜、ユーザー指定。図案はオリジナル）
+  glyph(p, x, y, r, c, c2) { const ctx = p.ctx; ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // 顔の輪郭（上が広く、あごがとがる）
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = c; ctx.lineWidth = Math.max(1, r * 0.08);
+    ctx.beginPath(); ctx.moveTo(x - r * 0.62, y - r * 0.55); ctx.quadraticCurveTo(x, y - r * 1.05, x + r * 0.62, y - r * 0.55);
+    ctx.quadraticCurveTo(x + r * 0.72, y + r * 0.2, x + r * 0.3, y + r * 0.62); ctx.quadraticCurveTo(x, y + r * 0.98, x - r * 0.3, y + r * 0.62);
+    ctx.quadraticCurveTo(x - r * 0.72, y + r * 0.2, x - r * 0.62, y - r * 0.55); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // 眉と細い目（線だけ。出目の点と見間違えないように丸は描かない）
+    ctx.strokeStyle = c; ctx.lineWidth = Math.max(1, r * 0.07);
+    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + sx * r * 0.12, y - r * 0.4); ctx.quadraticCurveTo(x + sx * r * 0.3, y - r * 0.55, x + sx * r * 0.48, y - r * 0.38); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + sx * r * 0.14, y - r * 0.2); ctx.quadraticCurveTo(x + sx * r * 0.3, y - r * 0.3, x + sx * r * 0.44, y - r * 0.2); ctx.stroke(); }
+    // ほお（薄い赤）
+    ctx.fillStyle = 'rgba(255,120,130,.35)'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + sx * r * 0.36, y + r * 0.05, r * 0.14, r * 0.09, 0, 0, 7); ctx.fill(); }
+    // 巻いたひげ・にやりとした口・とがったあごひげ
+    ctx.strokeStyle = c; ctx.lineWidth = Math.max(1, r * 0.09);
+    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x, y + r * 0.2); ctx.quadraticCurveTo(x + sx * r * 0.3, y + r * 0.1, x + sx * r * 0.45, y + r * 0.22); ctx.quadraticCurveTo(x + sx * r * 0.55, y + r * 0.1, x + sx * r * 0.48, y + r * 0.02); ctx.stroke(); }
+    ctx.lineWidth = Math.max(1, r * 0.05); ctx.beginPath(); ctx.moveTo(x - r * 0.22, y + r * 0.34); ctx.quadraticCurveTo(x, y + r * 0.44, x + r * 0.22, y + r * 0.34); ctx.stroke();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x - r * 0.06, y + r * 0.48); ctx.lineTo(x + r * 0.06, y + r * 0.48); ctx.lineTo(x, y + r * 0.78); ctx.closePath(); ctx.fill();
+    ctx.restore(); } });
+// 強化歯車（EX。3.14.0〜）：歯車の記号。つながった数が多いほど速く回る。活性は黒い歯車と、回る黒い円弧
+function gearShape(ctx, x, y, R, teeth, ang) {
+  ctx.beginPath();
+  for (let k = 0; k < teeth * 2; k++) { const a0 = ang + k * Math.PI / teeth, rr = k % 2 ? R * 0.78 : R;
+    ctx.lineTo(x + Math.cos(a0 - 0.12) * rr, y + Math.sin(a0 - 0.12) * rr); ctx.lineTo(x + Math.cos(a0 + 0.12) * rr, y + Math.sin(a0 + 0.12) * rr); }
+  ctx.closePath();
+}
+V('dice', 'gear', { c2: '#c9ced8',
+  palette(g, d) { return d.gearAct ? { c: '#15171c', c2: '#4a4f5a' } : null; },
+  orbit(g, d) { return d.gearAct ? { cols: ['#111318', '#5a5f6a'], dir: 1, shape: 'comet', period: 1400 } : null; },
+  glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx, d = p.die, n = d ? (d.gearN || 0) : 0;
+    const ang = (p.now || performance.now()) / 1000 * (0.25 + 0.9 * n) * (d && d.gearAct ? 2 : 1); // つながるほど速く回る
+    ctx.save(); ctx.fillStyle = c; gearShape(ctx, x, y, r * 0.95, 10, ang); ctx.fill();
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, 7); ctx.fill(); // 中は面の色（出目の点と重ならないように穴を大きく）
+    ctx.strokeStyle = c2; ctx.lineWidth = Math.max(1, r * 0.08); ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, 7); ctx.stroke();
+    ctx.restore(); } });
+// 割合ダメージ：敵の位置に半透明の歯車（光の剣と同じ扱い）
+V('fx', 'gearHit', { draw({ ctx, X, Y, S }, g, f, a) {
+  const e = g.enemies.find(x => x.id === f.eid && x.alive), [x, y] = g.posXY(e ? e.pos : f.pos);
+  ctx.save(); ctx.globalAlpha = Math.min(1, a * 1.5) * 0.6; ctx.fillStyle = 'rgba(150,160,180,0.8)'; ctx.strokeStyle = 'rgba(60,66,80,0.9)'; ctx.lineWidth = Math.max(1, 0.02 * S);
+  gearShape(ctx, X(x), Y(y), 0.32 * S * (1.2 - 0.2 * a), 8, (1 - a) * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(X(x), Y(y), 0.12 * S, 0, 7); ctx.stroke(); ctx.restore(); } });
+// スコープの発動・強化歯車の追加攻撃：そのダイスに一瞬スコープ（0.05秒。ダイスの上に描く）（3.14.0〜）
+V('fx', 'scopeProc', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
+  const [cx, cy] = g.cellXY(f.cell), x = X(cx), y = Y(cy), R = 0.36 * S;
+  ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ff4f86'; ctx.lineWidth = Math.max(1.5, 0.035 * S);
+  ctx.beginPath(); ctx.arc(x, y, R * 0.8, 0, 7); ctx.stroke();
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.beginPath(); ctx.moveTo(x + dx * R * 0.45, y + dy * R * 0.45); ctx.lineTo(x + dx * R * 1.05, y + dy * R * 1.05); ctx.stroke(); }
+  ctx.restore(); } });
+// ロイヤルで種類を変えられたダイス：オレンジの照準（0.5秒。ダイスの上に描く）（3.14.0〜、3.14.2〜 0.5秒）
+V('fx', 'royalHit', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
+  const [cx, cy] = g.cellXY(f.cell), x = X(cx), y = Y(cy), R = 0.2 * S * (1.15 - 0.15 * a);
+  ctx.save(); ctx.globalAlpha = Math.min(1, a * 2); ctx.strokeStyle = '#ff7a2e'; ctx.fillStyle = 'rgba(255,190,140,.35)'; ctx.lineWidth = Math.max(1.5, 0.03 * S);
+  for (const [ox, oy] of [[0.12, -0.12], [-0.14, 0.1]]) { const px = x + ox * S, py = y + oy * S;
+    ctx.beginPath(); ctx.arc(px, py, R, 0, 7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(px, py, R * 0.45, 0, 7); ctx.stroke();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.beginPath(); ctx.moveTo(px + dx * R * 0.6, py + dy * R * 0.6); ctx.lineTo(px + dx * R * 1.25, py + dy * R * 1.25); ctx.stroke(); } }
+  ctx.restore(); } });
 // バブルのかかったダイス：虹色に光る泡で包む（3.5.0〜）
 V('effect', 'bubble', { z: 3, draw({ ctx, S }, g, d, b) { if (!d.bubble) return;
   const cx = b.px, cy = b.y + b.fh / 2, R = b.w * 0.56;
@@ -4316,6 +4663,51 @@ V('dice', 'death', { c2: '#9aa0aa',   // 白い面に黒い鎌（本家の見た
     ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x + r * 0.6, y - r * 0.85); ctx.quadraticCurveTo(x - r * 0.75, y - r * 0.95, x - r * 0.9, y + r * 0.15);
     ctx.quadraticCurveTo(x - r * 0.35, y - r * 0.45, x + r * 0.45, y - r * 0.5); ctx.closePath(); ctx.fill(); } });
 V('dice', 'death_605', RD.DICE.death.view); // v6.0.5 の死も同じ見た目（3.2.1〜）
+// v6.7.2 で仕様が変わったダイス（別ID）は同じ見た目（4.0.0〜）
+V('dice', 'death_672', RD.DICE.death.view); V('dice', 'hell_672', RD.DICE.hell.view);
+V('dice', 'combo_672', RD.DICE.combo.view); V('dice', 'flow_672', RD.DICE.flow.view);
+// 地震（4.0.0〜。オリジナルの記号：金色の面に地割れ）。地震を出している間は赤橙に変わる
+V('dice', 'earthquake', { c2: '#7a4b12',
+  palette(g, d) { return d.quakeUntil > g.t ? { c: '#e2572b', c2: '#7a1f0a' } : null; },
+  glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.save();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r * 0.88, 0, 7); ctx.fill();
+    ctx.strokeStyle = c2; ctx.lineWidth = Math.max(1.2, r * 0.13); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const [a, l] of [[-2.4, 0.85], [-0.5, 0.8], [1.2, 0.85], [2.6, 0.6]]) { // 中心から4本の地割れ（ジグザグ）
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let k = 1; k <= 3; k++) { const t = k / 3, j = (k % 2 ? 0.22 : -0.22); ctx.lineTo(x + Math.cos(a + j) * r * l * t, y + Math.sin(a + j) * r * l * t); }
+      ctx.stroke(); }
+    ctx.restore(); },
+  // 地震の範囲（コロシアムの砂と同じ大きさ）と、地ならしの間の通路
+  under({ ctx, X, Y, S, now }, g) {
+    const Q = g.vars.quake; if (!Q) return;
+    const tm = (now || performance.now()) / 1000;
+    if (g.t < Q.levelUntil) {
+      const L = RD.TRACK_LEN || 12, pts = [0, 3.5, 8.5, L].map(dd => g.posXY(dd));
+      ctx.save(); ctx.strokeStyle = 'rgba(150,95,35,.28)'; ctx.lineWidth = 0.95 * S; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); ctx.restore();
+    }
+    for (const q of Q.list) {
+      if (g.t >= q.until) continue;
+      const [x, y] = g.posXY(q.pos), sh = Math.sin(tm * 40) * 0.025 * S; // 小刻みに揺れる
+      ctx.save(); ctx.fillStyle = 'rgba(176,110,40,.32)'; ctx.beginPath(); ctx.arc(X(x) + sh, Y(y), q.r * S, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,60,15,.75)'; ctx.lineWidth = Math.max(1.2, 0.03 * S); ctx.setLineDash([0.08 * S, 0.06 * S]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(95,45,10,.55)'; ctx.lineWidth = Math.max(1, 0.022 * S);
+      for (let k = 0; k < 3; k++) { const a = k * 2.1 + 0.4; ctx.beginPath(); ctx.moveTo(X(x) + sh, Y(y));
+        ctx.lineTo(X(x) + sh + Math.cos(a + 0.3) * q.r * S * 0.45, Y(y) + Math.sin(a + 0.3) * q.r * S * 0.45);
+        ctx.lineTo(X(x) + sh + Math.cos(a) * q.r * S * 0.85, Y(y) + Math.sin(a) * q.r * S * 0.85); ctx.stroke(); }
+      ctx.restore();
+    }
+  } });
+// 雪玉（4.0.0〜。オリジナルの記号：影のついた雪玉と小さな雪の結晶）
+V('dice', 'snowball', { c2: '#e8f7ff',
+  glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.save();
+    const gr = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 0.8); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, c);
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r * 0.72, 0, 7); ctx.fill();
+    ctx.strokeStyle = c; ctx.lineWidth = Math.max(1, r * 0.08); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, r * 0.07); ctx.lineCap = 'round';
+    for (const [fx, fy, fr] of [[0.62, -0.62, 0.2], [-0.7, 0.55, 0.15]]) for (let k = 0; k < 3; k++) { const a = k * Math.PI / 3;
+      ctx.beginPath(); ctx.moveTo(x + fx * r - Math.cos(a) * fr * r, y + fy * r - Math.sin(a) * fr * r); ctx.lineTo(x + fx * r + Math.cos(a) * fr * r, y + fy * r + Math.sin(a) * fr * r); ctx.stroke(); }
+    ctx.restore(); } });
 V('dice', 'hell', { c2: '#c9ccd3',   // 灰色のどくろ（本家の見た目に合わせた色）
   glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(x, y - r * 0.15, r * 0.72, 0, 7); ctx.fill(); ctx.fillRect(x - r * 0.4, y + r * 0.25, r * 0.8, r * 0.52);
     ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x - r * 0.28, y - r * 0.15, r * 0.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(x + r * 0.28, y - r * 0.15, r * 0.2, 0, 7); ctx.fill();
@@ -4396,7 +4788,7 @@ function buildDeckRows(boxId, prefix, deck, note, prev){
   for (let k=0;k<5;k++){
     const row = document.createElement('div'); row.className='deckrow';
     const s = document.createElement('select'); s.id=prefix+'k'+k;
-    avail.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=RD.verName(DICE[t],v)+(DICE[t].opp?'＊':'');s.appendChild(o);});
+    avail.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=(DICE[t].ex?'【EX】'+DICE[t].name:RD.verName(DICE[t],v))+(DICE[t].opp?'＊':'');s.appendChild(o);});
     let want = prev && prev[k] ? prev[k].t : deck[k];
     want = RD.diceFor(want, v); // そのバージョンにないときは、まず同じダイスの別バージョン（陰陽 6.0.5 ↔ 6.5.0 など）（3.3.0〜）
     if (!avail.includes(want) || used.some(u=>RD.aiType(u)===RD.aiType(want))) want = avail.find(t=>!used.some(u=>RD.aiType(u)===RD.aiType(t))) || avail[0]; // それでもなければ入れ替え
@@ -4409,7 +4801,7 @@ function buildDeckRows(boxId, prefix, deck, note, prev){
       Object.keys(T).filter(id=>RD.availableIn(T[id],v)).forEach(id=>{ const o=document.createElement('option'); o.value=id; o.textContent=T[id].name+(T[id].minClass?`（クラス${T[id].minClass}〜）`:''); o.title=(T[id].desc||'')+(T[id].minClass?` クラス${T[id].minClass}未満では効かない。`:''); tr.appendChild(o); });
       tr.value=[...tr.options].some(o=>o.value===keep)?keep:''; tr.disabled=tr.options.length<2; };
     const paint=()=>{ chip.style.setProperty('--dc', DICE[s.value].color); s.title = DICE[s.value].desc||''; };
-    const sync=()=>{ c.value = RD.diceClass(tmp, s.value); l.max = DICE[s.value].puMax||5; if(+l.value>+l.max) l.value=l.max; fillTraits(); paint(); };
+    const sync=()=>{ c.value = RD.diceClass(tmp, s.value); c.disabled=!!DICE[s.value].fixedClass; c.min=DICE[s.value].classMin||1; c.title=DICE[s.value].fixedClass?`クラス${DICE[s.value].fixedClass}限定`:'クラス'; l.max = DICE[s.value].puMax||5; if(+l.value>+l.max) l.value=l.max; fillTraits(); paint(); };
     s.onchange=sync;
     sync();
     if (prev && prev[k] && (prev[k].t===want || RD.aiType(prev[k].t)===RD.aiType(want))){ c.value=prev[k].c; l.value=prev[k].l; if(prev[k].tr){ tr.value=prev[k].tr; if(tr.value!==prev[k].tr) tr.value=''; } }
@@ -4555,7 +4947,7 @@ function newGame(){
   curEntry = null; selfEntry = null;
   if (m==='practice') {
     match = null; oppGame = null;
-    game = new Game(cfg); rec = new RD.Recorder(game);
+    game = new Game(cfg); rec = saveRec ? new RD.Recorder(game) : null;
   } else {
     const hv=$('cHost').value;
     let side0 = null, side1 = null;
@@ -4568,10 +4960,11 @@ function newGame(){
     }
     match = new RD.Match({ cfg, sides: [side0 || {}, side1 || readOppCfg()], seed: cfg.seed, host: hv==='random'?'random':+hv });
     game = match.games[0]; oppGame = match.games[1];
-    rec = new RD.MatchRecorder(match, opponentMeta());
+    rec = saveRec ? new RD.MatchRecorder(match, opponentMeta()) : null;
     if (aiVsAi(m)) aiOn = true;
   }
   $('oppBox').style.display = oppGame ? '' : 'none';
+  applyLogOn(); recKey=''; syncRecUI();
   hookView(game); if (oppGame) hookView(oppGame, true);
   sel=-1; lastLogLen=-1; buildPU(); fillBatchSel(); resize();
   if(aiOn) startAI(); else syncAIBtn();
@@ -4596,7 +4989,7 @@ function refreshPU(){
     else { lh = l>=mx ? 'MAX' : `LV.${l}`; ch = l>=mx ? '' : `SP ${isFinite(c)?c:'-'}`; }
     if(lv.innerHTML!==lh){ lv.innerHTML=lh; lv.classList.toggle('max', lh==='MAX'); }
     if(co.textContent!==ch){ co.textContent=ch; co.style.visibility=ch?'':'hidden'; }
-    b.disabled = l>=mx || !isFinite(c) || game.sp<c || game.over;}
+    b.classList.toggle('dis', l>=mx || !isFinite(c) || game.sp<c || game.over);} // 押せない状態は disabled でなくクラスで（Web版：押せないボタンの連打で画面が拡大しないように）
 }
 // ダイスの絵を小さなキャンバスに描く（PUボタン・相手のデッキ）（3.10.0〜）。出目なし
 function iconDie(c, g, t, pips){
@@ -4630,12 +5023,22 @@ function sizeView(canvas, v){
 }
 function resize(){ sizeView(cv, views.main); if(oppGame) sizeView(cvO, views.opp); }
 // 相手盤面の拡大（自分と同じ大きさ・情報は下に1行）／縮小（これまでどおり・情報は右）。初期は拡大。選んだ方を覚える
+// ログ・リプレイの保存（3.15.0〜）：初期設定はどちらも保存しない。このブラウザに覚える
+let saveLog = false, saveRec = false;
+try{ saveLog = localStorage.getItem('rd_saveLog')==='1'; saveRec = localStorage.getItem('rd_saveRec')==='1'; }catch(e){}
+function applyLogOn(){ if(game) game.logOn = saveLog; if(oppGame) oppGame.logOn = saveLog; }
+function syncRecUI(){ const on=!!rec; $('bRecDl').disabled=!on; $('bRecCopy').disabled=!on; $('recMemo').disabled=!on;
+  if(!on) $('recInfo').textContent = saveRec ? 'リプレイの保存はオンです。次の開始（「この設定で開始」・リセット・再戦）から記録します。' : 'リプレイを保存しない設定です（初期設定）。'; }
 let oppBig = true; try{ const v=localStorage.getItem('rd_oppBig'); if(v!==null) oppBig = v!=='0'; }catch(e){}
 function applyOppBig(){
   $('oppBox').classList.toggle('big', oppBig);
   $('oZoom').textContent = oppBig ? '縮小' : '拡大';
   resize(); if(oppGame){ oppHud(); draw(); }
 }
+$('cSaveLog').checked = saveLog; $('cSaveRec').checked = saveRec;
+$('cSaveLog').onchange = () => { saveLog = $('cSaveLog').checked; try{ localStorage.setItem('rd_saveLog', saveLog?'1':'0'); }catch(e){} applyLogOn();
+  if(saveLog && game){ const note='（ここからログの保存をオンにしました）'; game.L(note); if(oppGame) oppGame.L(note); } if($('pFull').classList.contains('act')) showFull(); };
+$('cSaveRec').onchange = () => { saveRec = $('cSaveRec').checked; try{ localStorage.setItem('rd_saveRec', saveRec?'1':'0'); }catch(e){} syncRecUI(); };
 $('oZoom').onclick = () => { oppBig = !oppBig; try{ localStorage.setItem('rd_oppBig', oppBig?'1':'0'); }catch(e){} applyOppBig(); };
 $('oppBox').classList.toggle('big', oppBig); $('oZoom').textContent = oppBig ? '縮小' : '拡大';
 // FLIP：対戦の相手盤面は上下左右を反転して描く（画面の奥＝相手陣。文字・ダイスの向きはそのまま）
@@ -4643,7 +5046,7 @@ let FLIP = false;
 const X = x => FLIP ? W-(x-UX0)*S : (x-UX0)*S, Y = y => FLIP ? H-(UY1-y)*S : (UY1-y)*S;
 // 描く道具：登録物の view の関数に渡す（ctx・S・W・H・flip は、いま描いている盤面のもの）
 const RAINBOW=['#ff5a5a','#ffb03a','#f2e04a','#4ccf6a','#4a8ff0','#a65ae0'];
-const P={ get ctx(){return ctx;}, get S(){return S;}, get W(){return W;}, get H(){return H;}, get flip(){return FLIP;}, X, Y, now:0, RAINBOW,
+const P={ die:null, get ctx(){return ctx;}, get S(){return S;}, get W(){return W;}, get H(){return H;}, get flip(){return FLIP;}, X, Y, now:0, RAINBOW,
   roundRect:(x,y,w,h,r)=>roundRect(x,y,w,h,r), mix:(a,b,k)=>mixHex(a,b,k), glow:(...a)=>glow(...a), orbit:(...a)=>orbitArcs(...a), sparkle:(...a)=>drawSparkle(...a), star:(...a)=>star(...a) };
 function draw(){
   P.now=performance.now();
@@ -4672,6 +5075,7 @@ function drawBoard(g, main, agent){
   if(flow>0){ ctx.fillStyle='#23874a'; ctx.font=`bold ${0.2*S}px sans-serif`; ctx.fillText(`${oppSpeedLabel(g.opp)} +${Math.round(flow*100)}%`,X(2.5),Y(3.15)+(FLIP?0.07*S:0)); }
   // 通路の設置物（フィールドの砂など）・盾
   if(FV.under) FV.under(P,g);
+  for(const t of g.cfg.deck){ const DV=DICE[t].view; if(DV&&DV.under) DV.under(P,g); } // ダイスの通路の設置物（地震の範囲。4.0.0〜）
   for(const s of g.shields){const [x,y]=g.posXY(s.pos); ctx.fillStyle='rgba(70,110,170,.85)'; ctx.fillRect(X(x)-0.12*S,Y(y)-0.12*S,0.24*S,0.24*S);}
   // 敵（種類ごとの色は ENEMY[kind].view）
   const labeled=[];
@@ -4699,6 +5103,8 @@ function drawBoard(g, main, agent){
     if(e.marked) inner('#b07bff',Math.max(1.5,0.03*S));                // テレポートの放出
     if(g.enemySlow(e)>0) inner('#8fd3ff',Math.max(1.2,0.025*S));       // 減速中（氷・吹雪など）
     if(e.frozenUntil>g.t) inner('#e0f7ff',Math.max(2,0.04*S));         // 凍結中
+    if(e.snow>0){ ctx.fillStyle='#ffffff'; ctx.strokeStyle='#5aa9d6'; ctx.lineWidth=1; const dr=Math.max(1.8,0.045*S); // 雪玉の数（4.0.0〜）
+      for(let k=0;k<e.snow;k++){ ctx.beginPath(); ctx.arc(X(x)-r+dr*1.3+k*dr*2.3,Y(y)+r-dr*1.3,dr,0,7); ctx.fill(); ctx.stroke(); } }
     ctx.globalAlpha=1;
   }
   for(const e of ens.slice().reverse()){
@@ -4719,7 +5125,7 @@ function drawBoard(g, main, agent){
   }
   // 表示用エフェクト（太陽のスプラッシュ範囲・核爆発など。描き方は RD.FX_VIEWS）
   { const last=new Map(), list=[];
-    for(const f of g.fx){ const FX=FX_VIEWS[f.k]; if(!FX||!FX.draw) continue; if(FX.latestBy) last.set(f.k+':'+f[FX.latestBy],f); else list.push(f); }
+    for(const f of g.fx){ const FX=FX_VIEWS[f.k]; if(!FX||!FX.draw||FX.top) continue; if(FX.latestBy) last.set(f.k+':'+f[FX.latestBy],f); else list.push(f); }
     for(const f of [...last.values(),...list]) FX_VIEWS[f.k].draw(P,g,f,Math.max(0,1-(g.t-f.t)/(f.life||0.2))); }
   // 盤面
   if(main && drag && g.board[drag.cell]!==drag.die) drag=null; // 元の位置のダイスが更新されたら表示を消す
@@ -4749,9 +5155,10 @@ function drawBoard(g, main, agent){
   for(let i=0;i<15;i++){const d=g.board[i]; if(!d) continue; const V=DICE[d.type].view; if(!V||!V.overlay) continue;
     const [cx,cy]=g.cellXY(i); V.overlay({ctx,X,Y,S,g,d,i,cx,cy,p:P});}
   // ボス抽選の演出
-  if(g.phase==='roll') drawRoll(g, main); else if(deathAnnouncing(g)) drawDeathAnnounce(g);
+  if(g.phase==='roll') drawRoll(g, main); else if(enrageAnnouncing(g)) drawEnrageAnnounce(g); else if(deathAnnouncing(g)) drawDeathAnnounce(g);
   if(g.phase==='wait') drawWait(g, main);
   if(g.phase==='intro') drawBossIntro(g);
+  drawCaptures(g); // テレポートの格納：敵をダイスへ吸い込む（4.3.5〜）
   // 弾（ダイスより上のレイヤー）。飛ぶ時間はエンジンの計算（マスの中心から）のまま、見た目の出発点だけ出目の点にする
   drawShots(g);
   // ダメージ表示（敵の上）。相手の盤面にも出す（縮小表示のときは出さない）（3.10.1〜）
@@ -4800,7 +5207,7 @@ function glow(px,py,s,col,a,inset){inset=inset||0;a=Math.min(1,a);const gr=ctx.c
   ctx.strokeStyle=`rgba(${col},${Math.min(1,a+0.1)})`;ctx.lineWidth=3;roundRect(px-s*0.5+inset,py-s*0.5+inset,s-2*inset,s-2*inset,0.12*S);ctx.stroke();}
 // ---------- 弾・ダメージ表示・点の発射演出（表示専用。エンジンの結果には影響しない） ----------
 const PIP_FLASH_MS=140, DMG_MS=650;
-const ENEMY_VIS=Math.sqrt(0.6)*1.3; // モンスターの見た目の大きさ（辺の倍率。表示だけ）（3.10.3〜 面積3/5、3.12.0〜 その1.3倍）
+const ENEMY_VIS=Math.sqrt(0.6)*1.3*0.8; // モンスターの見た目の大きさ（辺の倍率。表示だけ）（3.10.3〜 面積3/5、3.12.0〜 その1.3倍、4.3.7〜 その0.8倍〔4.3.6 は0.7倍〕）
 const NUM_FS=0.5;               // HPの数字の大きさ（3.10.1 比。3.12.2〜 3.10.3 と同じ 0.5）
 const DMG_FS=0.6;               // ダメージの数字の大きさ（3.10.1 比。3.12.2〜 3.10.3 の1.2倍）
 let shotPip=new WeakMap();   // 弾 → {cell, n（出目）, k（点の番号）}
@@ -4813,10 +5220,11 @@ function hookView(g, keep){
   if(!keep){ shotPip=new WeakMap(); dmgPops=new Map(); atomPops=new Map(); pipFlash=new Map(); pipNext=new Map(); }
   const pf=new Map(), pn=new Map(); pipFlash.set(g,pf); pipNext.set(g,pn);
   hookIntro(g); // ボス出現の演出（3.13.0〜）
+  hookCapture(g); // テレポートの格納の演出（4.3.5〜）
   g.on('fire',({cell,die,shot})=>{
     const n=die.pips, k=(pn.get(die.id)||0)%(n===7?1:n);
     pn.set(die.id,k+1); pf.set(die.id,{k,t:performance.now()});
-    shotPip.set(shot,{cell,n,k});
+    if(shot) shotPip.set(shot,{cell,n,k});
   });
   g.on('action',({result,from,to})=>{ // スイッチの入れ替え：動いた2つのダイスにも出現のアニメーション
     if(result!=='swap') return; const now=performance.now();
@@ -4829,6 +5237,13 @@ function hookView(g, keep){
   g.on('hit',({enemy,amount,crit,die})=>{
     dmgPops.set(enemy,{amount,crit,heal:!!(die&&(die.hacked||die.ixHack)),t:performance.now()});
   });
+  // 割合ダメージ（光の剣・天上の剣・強化歯車）も通常のダメージと同じ見た目でモンスターの位置に（3.15.2〜）。弾と同時のときは2段目
+  g.on('pctHit',({enemy,amount,die,lane,src})=>{
+    const heal=!!(die&&(die.hacked||die.ixHack));
+    const o={amount,crit:false,heal,t:performance.now()};
+    if(src==='gear' && !heal){ o.color='#111111'; o.stroke='#ffffff'; } // 強化歯車の割合ダメージは黒い数字（白い縁。3.15.4〜）
+    (lane?atomPops:dmgPops).set(enemy,o);
+  });
   g.on('instaKill',({enemy})=>{ dmgPops.set(enemy,{text:'即死',crit:true,heal:false,t:performance.now()}); }); // 即死の表示（2.0.0〜）
 }
 // ボス抽選の演出で、名前が切り替わっている間か（前半。そのあと決まったボスを表示）
@@ -4839,6 +5254,36 @@ function hookView(g, keep){
 //   20〜45%：そこにボスの姿が現れる（拡大）。HPの数字が基礎HPから増え始める
 //   70〜100%：ボスが入口へ移動する。HPは95%で増え終わる（入口に着く少し前）
 const introMemo=new WeakMap();
+// テレポートの格納（4.3.5〜）：格納された敵が、渦を巻きながら小さくなってテレポートのダイスに吸い込まれる（見た目だけ。実時間0.45秒）
+const captureMemo=new WeakMap(), CAPTURE_DUR=450;
+function hookCapture(g){ if(captureMemo.has(g)) return; const L=[]; captureMemo.set(g,L);
+  g.on('capture',({enemy,die})=>{ L.push({pos:enemy.pos, d:enemy.d, die, t0:performance.now(), spin:(enemy.id||0)%2?1:-1}); if(L.length>40) L.shift(); }); }
+function drawCaptures(g){
+  const L=captureMemo.get(g); if(!L||!L.length) return;
+  const now=performance.now();
+  for(let k=L.length-1;k>=0;k--){
+    const c=L[k], a=(now-c.t0)/CAPTURE_DUR; if(a>=1||a<0){ L.splice(k,1); continue; }
+    const cell=g.board.indexOf(c.die); if(cell<0){ L.splice(k,1); continue; }
+    const [ex,ey]=g.posXY(c.pos), [cx,cy]=g.cellXY(cell), x0=X(ex), y0=Y(ey), x1=X(cx), y1=Y(cy);
+    const e=a*a*(3-2*a), u=a*a; // 位置はなめらかに、吸い込みは後半ほど速く
+    const sw=Math.sin(Math.PI*a)*0.35*S*c.spin, dx=x1-x0, dy=y1-y0, L2=Math.hypot(dx,dy)||1; // 進む向きに直角の方向へふくらませて弧を描く
+    const px=x0+dx*u+(-dy/L2)*sw, py=y0+dy*u+(dx/L2)*sw;
+    const r=c.d/2*S*ENEMY_VIS*(1-0.85*e), rot=a*Math.PI*3*c.spin;
+    ctx.save();
+    // ダイスの上の渦（紫の弧が回りながら縮む）
+    const vr=0.42*S*(1-0.35*a);
+    ctx.globalAlpha=0.85*Math.sin(Math.PI*Math.min(1,a*1.2)); ctx.strokeStyle='#b46bff'; ctx.lineWidth=Math.max(1.5,0.045*S); ctx.lineCap='round';
+    for(let j=0;j<3;j++){ const s0=now/120*c.spin+j*2.094; ctx.beginPath(); ctx.arc(x1,y1,vr*(1-j*0.22),s0,s0+1.6); ctx.stroke(); }
+    // 吸い込まれる敵（尾を引く）
+    for(let t=2;t>=0;t--){ const a2=Math.max(0,a-t*0.05), u2=a2*a2, sw2=Math.sin(Math.PI*a2)*0.35*S*c.spin;
+      const qx=x0+dx*u2+(-dy/L2)*sw2, qy=y0+dy*u2+(dx/L2)*sw2, r2=c.d/2*S*ENEMY_VIS*(1-0.85*(a2*a2*(3-2*a2)));
+      ctx.globalAlpha=(t?0.25/t:1)*(1-0.5*e); ctx.save(); ctx.translate(qx,qy); ctx.rotate(rot-t*0.3);
+      ctx.fillStyle=t?'#b46bff':'#111318'; roundRect(-r2,-r2,2*r2,2*r2,Math.min(r2*0.25,0.06*S)); ctx.fill();
+      if(!t){ ctx.strokeStyle='#e2b6ff'; ctx.lineWidth=Math.max(1,0.03*S); ctx.stroke(); }
+      ctx.restore(); }
+    ctx.restore();
+  }
+}
 function hookIntro(g){ if(introMemo.has(g)) return; introMemo.set(g,null); g.on('bossIntro',p=>introMemo.set(g,Object.assign({t0:g.t},p))); }
 function drawBossIntro(g){
   const I=introMemo.get(g); if(!I||!(I.dur>0)) return;
@@ -4861,11 +5306,28 @@ function drawBossIntro(g){
   ctx.textAlign='center'; hpText(txt, bx, by+fs*0.36, fs, '#ffe08a', 'rgba(10,12,18,.95)', Math.max(1.5,fs*0.22));
 }
 function deathStartRoll(g){ return g.hasDeathWave && g.phase==='roll' && g.wave+1===g.cfg.deathWave; }
-function rollPlan(g){ const total=g.cfg.rollTime, ann=deathStartRoll(g)?Math.min(total*0.4,1.4):0;
+// 狂暴化の開始のアナウンス（デスウェーブと同じ形。紫。4.1.0〜）
+function enrageStartRoll(g){ return !!g.hasEnrage && g.phase==='roll' && g.wave+1===g.cfg.enrageWave; }
+function enrageAnnouncing(g){
+  if(!g.hasEnrage) return false;
+  if(g.phase==='roll') { if(!enrageStartRoll(g)) return false; const r=rollPlan(g); return r.ann>0 && r.el<r.ann; }
+  return g.wave===g.cfg.enrageWave && (g.wave===1 || !(g.cfg.rollTime>0)) && g.t-g.waveStart<1.5 && g.phase==='wave';
+}
+function enrageTint(g){ return !!g && !!g.hasEnrage && (g.enrageOn() || enrageStartRoll(g)); }
+function drawEnrageAnnounce(g){
+  const cx=X(2.5), cy=Y(1.75), w=5.4*S, h=1.3*S, a=0.75+0.25*Math.sin(performance.now()/90);
+  ctx.save(); ctx.fillStyle='rgba(22,0,40,.9)'; roundRect(cx-w/2,cy-h/2,w,h,0.18*S); ctx.fill();
+  ctx.strokeStyle=`rgba(190,110,255,${a})`; ctx.lineWidth=3; roundRect(cx-w/2,cy-h/2,w,h,0.18*S); ctx.stroke();
+  ctx.textAlign='center'; ctx.fillStyle=`rgba(200,130,255,${a})`; ctx.font=`900 ${0.5*S}px sans-serif`; ctx.fillText('BOSS RAGE',cx,cy+0.05*S);
+  ctx.fillStyle="#e4c8ff"; ctx.font=`bold ${0.16*S}px sans-serif`;
+  ctx.fillText(`${g.cfg.enrageWave}Wからボスが狂暴化：ボスの能力が強まり、撃破SPは${g.cfg.enrageWave}W基準`,cx,cy+0.42*S);
+  ctx.restore();
+}
+function rollPlan(g){ const total=g.cfg.rollTime, ann=(deathStartRoll(g)||enrageStartRoll(g))?Math.min(total*0.4,1.4):0;
   return { total, ann, spin: ann+Math.min((total-ann)*0.5,1.6), el: total-Math.max(0,g.rollUntil-g.t) }; }
 function deathAnnouncing(g){
   if(!g.hasDeathWave) return false;
-  if(g.phase==='roll') { const r=rollPlan(g); return r.ann>0 && r.el<r.ann; }
+  if(g.phase==='roll') { if(!deathStartRoll(g)) return false; const r=rollPlan(g); return r.ann>0 && r.el<r.ann; }
   return g.wave===g.cfg.deathWave && (g.wave===1 || !(g.cfg.rollTime>0)) && g.t-g.waveStart<1.5 && g.phase==='wave';
 }
 // 画面をデスウェーブの色にするか（デスウェーブ中、または開始のアナウンス中）
@@ -4881,6 +5343,7 @@ function drawDeathAnnounce(g){
 }
 function rollSpinning(g){ const r=rollPlan(g); return r.el < r.spin; }
 function drawRoll(g, main){
+  if(enrageAnnouncing(g)) return drawEnrageAnnounce(g);
   if(deathAnnouncing(g)) return drawDeathAnnounce(g);
   const names=g.bossPool().map(b=>BOSSES[b].name), left=Math.max(0,g.rollUntil-g.t), {el,spin}=rollPlan(g);
   const name = el<spin && names.length>1 ? names[Math.floor(performance.now()/90)%names.length] : BOSSES[g.nextBossType].name;
@@ -4975,7 +5438,7 @@ function drawPops(g, pops, drop){
     const fs=(p.size||(p.crit?0.36:0.26))*S*pop*DMG_FS;
     const txt=p.text!=null?p.text:(p.heal?'+':'')+numFull(p.amount);
     ctx.globalAlpha=alpha; fitFont(txt, fs, 2.0*S*pop, '900'); p.x=inCanvasX(txt, p.x);
-    ctx.lineWidth=Math.max(1.5,fs*0.2); ctx.strokeStyle='#1a1206'; ctx.strokeText(txt,p.x,p.y-0.06*S-rise);
+    ctx.lineWidth=Math.max(1.5,fs*0.2); ctx.strokeStyle=p.stroke||'#1a1206'; ctx.strokeText(txt,p.x,p.y-0.06*S-rise);
     ctx.fillStyle=p.color||(p.text!=null?'#ff5a6e':p.heal?'#5ee06a':p.crit?'#ffb21e':'#ffffff'); ctx.fillText(txt,p.x,p.y-0.06*S-rise);
   }
   ctx.restore();
@@ -5047,13 +5510,14 @@ function drawDie(g,d,px,py,i){
   if(D.rar==='L'){ ctx.strokeStyle=mixHex(C,'#ffffff',0.45); ctx.lineWidth=Math.max(1,rw*0.35); roundRect(x+rw*1.6,y+rw*1.6,w-rw*3.2,fh-rw*3.2,rr*0.6); ctx.stroke();
     dragonCrest(px, y-0.01*S, 0.14*S, V.dragon ? V.dragon : V.rim&&V.rim.length ? V.rim[Math.floor(V.rim.length/2)] : C); } // 伝説：上の辺の中央に小さな竜の顔（枠と同じ色。3.10.0〜）
   ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x+rr,y+rw+1); ctx.lineTo(x+w-rr,y+rw+1); ctx.stroke(); // 上の縁の照り
-  const cy=y+fh/2+0.03*S; // 面の中心（名前の分だけ少し下）
+  const showName = !(i>=0 && !FLIP); // 自分の盤面（下側）のダイスには名前を書かない。相手の盤面・アイコンには書く（4.3.3〜）
+  const cy=y+fh/2+(showName?0.03*S:0); // 面の中心（名前があるときはその分だけ少し下）
   if(act){ ctx.strokeStyle=V.activeRim||(D.activeGlow?mixHex('#'+D.activeGlow.split(',').map(v=>(+v).toString(16).padStart(2,'0')).join(''),'#0d0f14',0.1):'#ffb300'); ctx.lineWidth=2.5; roundRect(x,y,w,fh,rr); ctx.stroke(); }
   ctx.textAlign='center';
   const badge=V.badge?V.badge(g,d):null;
   // 記号（出目の点の下のレイヤー）
-  ctx.save(); ctx.globalAlpha=badge!=null?0.25:0.55; (V.glyph||defaultGlyph)(P,px,cy,0.24*S,C,C2,face); ctx.restore(); ctx.textAlign='center';
-  if(badge==null){ ctx.fillStyle=mixHex(C,'#0d0f14',0.55); ctx.font=`bold ${0.12*S}px sans-serif`; ctx.fillText(D.name.slice(0,4),px,y+rw+0.12*S); }
+  P.die=d; P.now=now; ctx.save(); ctx.globalAlpha=badge!=null?0.25:0.55; (V.glyph||defaultGlyph)(P,px,cy,0.24*S,C,C2,face); ctx.restore(); P.die=null; ctx.textAlign='center'; // P.die：記号から今のダイスを見られる（強化歯車の回転。3.14.0〜）
+  if(badge==null && showName){ ctx.fillStyle=mixHex(C,'#0d0f14',0.55); ctx.font=`bold ${0.12*S}px sans-serif`; ctx.fillText(D.name.slice(0,4),px,y+rw+0.12*S); }
   const pfm=pipFlash.get(g), pf=pfm&&pfm.get(d.id); // 直前に弾を出した点（一瞬ふくらませる）
   const fk=pf?1-Math.min(1,(now-pf.t)/PIP_FLASH_MS):0;
   if(badge!=null){ // 名前の代わりに、ダイス全体に収まる大きさで強調表示（コンボ数など）。出目の点より下のレイヤー
@@ -5090,19 +5554,20 @@ function checkActivation(g){
   for(const t of new Set(g.cfg.deck)){
     if(!DICE[t].activeCounts) continue;
     const a=g.isActive(t), prev=st.types.get(t); st.types.set(t,a);
-    if(a && prev===false){ const fam=RD.aiType(t);
-      for(let i=0;i<15;i++){ const d=g.board[i]; if(d&&d.type===t){ seen.set(d,now); if(fam==='moon'||fam==='sun') st.fx.push({i,kind:fam,t:now,id:d.id}); } } }
+    if(a && prev===false){ const fam=RD.aiType(t), AP=DICE[t].view&&DICE[t].view.actPattern, pk=AP?AP.kind:(fam==='moon'||fam==='sun')?fam:null; // actPattern：月・太陽の模様を色違いで（4.3.0〜）
+      for(let i=0;i<15;i++){ const d=g.board[i]; if(d&&d.type===t){ seen.set(d,now); if(pk) st.fx.push({i,kind:pk,hue:AP?AP.hue:0,t:now,id:d.id}); } } }
   }
   for(let i=0;i<15;i++){ const d=g.board[i]; if(!d||RD.aiType(d.type)!=='yinyang'||!g.lineStatus) continue;
     const ln=g.lineStatus(i,d.type), v=(ln.col?1:0)|(ln.row?2:0), prev=st.yy.get(d); st.yy.set(d,v);
     if(prev!=null && (v & ~prev)) seen.set(d,now); }
 }
 function drawActFx(g){
+  for(const f of g.fx){ const FX=FX_VIEWS[f.k]; if(FX&&FX.top&&FX.draw) FX.draw(P,g,f,Math.max(0,1-(g.t-f.t)/(f.life||0.2))); } // ダイスの上に描く表示（スコープの発動・ロイヤル。3.14.0〜）
   const st=actMemo.get(g); if(!st||!st.fx.length) return; const now=performance.now();
   for(let k=st.fx.length-1;k>=0;k--){ const f=st.fx[k], a=(now-f.t)/ACT_FX_MS; if(a>=1){ st.fx.splice(k,1); continue; }
     const d=g.board[f.i]; if(!d||d.id!==f.id) continue;
     const [cx,cy]=g.cellXY(f.i), px=X(cx), py=Y(cy), z=0.85+0.3*a, al=a<0.2?a/0.2:1-(a-0.2)/0.8;
-    ctx.save(); ctx.globalAlpha=Math.max(0,al)*0.85; ctx.translate(px,py); ctx.scale(z,z);
+    ctx.save(); ctx.globalAlpha=Math.max(0,al)*0.85; ctx.translate(px,py); ctx.scale(z,z); if(f.hue) ctx.filter=`hue-rotate(${f.hue}deg)`;
     if(f.kind==='sun') sunPattern(0.62*S); else moonPattern(0.58*S);
     ctx.restore(); }
 }
@@ -5169,7 +5634,7 @@ function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,
 // ---------- HUD・ログ ----------
 function hud(){
   const g=game;
-  { const dw=deathTint(game); if(document.body.classList.contains('death')!==dw) document.body.classList.toggle('death',dw); }
+  { const er=enrageTint(game), dw=!er&&deathTint(game); if(document.body.classList.contains('death')!==dw) document.body.classList.toggle('death',dw); if(document.body.classList.contains('enrage')!==er) document.body.classList.toggle('enrage',er); } // 狂暴化は紫（4.1.0〜）
   $('hW').textContent=g.wave;
   if(g.phase==='wave'){$('hTl').textContent='通常 残り';$('hT').textContent=Math.ceil(Math.max(0,g.bossAt-g.t));}
   else if(g.phase==='roll'){$('hTl').textContent='ボス抽選';$('hT').textContent=Math.ceil(Math.max(0,g.rollUntil-g.t));}
@@ -5178,13 +5643,13 @@ function hud(){
   else {$('hTl').textContent=g.phaseName()==='boss'?'ボス戦':'残り処理';$('hT').textContent=g.boss?Math.floor(g.t-g.boss.spawnT)+'s':(g.waitClear?g.enemies.filter(e=>e.alive).length+'体':'-');}
   { const nb = g.phase==='wave'?g.bossType:g.phase==='roll'?g.nextBossType:null;
     const vb = `<span class="verbadge">${RD.versionLabel(g.cfg).replace(/（.*?シーズン）/,'')}</span>`;
-    const html = (deathAnnouncing(g) ? `<span class="dwtag">デスウェーブ開始</span>` : g.phase==='roll' ? (rollSpinning(g) ? `<span>${g.wave+1}Wのボスを抽選中…</span>` : `<span>${g.wave+1}Wのボス</span> <b>${BOSSES[nb].name}</b>`)
+    const html = (enrageAnnouncing(g) ? `<span class="ertag">ボスの狂暴化開始</span>` : deathAnnouncing(g) ? `<span class="dwtag">デスウェーブ開始</span>` : g.phase==='roll' ? (rollSpinning(g) ? `<span>${g.wave+1}Wのボスを抽選中…</span>` : `<span>${g.wave+1}Wのボス</span> <b>${BOSSES[nb].name}</b>`)
       : g.phase==='wait' ? `<span>相手がボスウェーブを終えるのを待っています</span>`
       : nb ? `<span>次のボス</span> <b>${BOSSES[nb].name}</b>` : `<span>ボス戦（次のボスはボス抽選で決まる）</span>`) + vb;
     if($('hNB').innerHTML!==html) $('hNB').innerHTML=html; }
   $('hL').textContent=g.life; $('hSP').textContent=Math.floor(g.sp); { const hv=g.cfg.deck.map(t=>DICE[t].view&&DICE[t].view.hud).find(Boolean), h=hv?hv(g):{label:'召喚回数',value:g.summonCount}; // 5番目の欄：ダイスの view.hud（コンボ数）。なければ召喚回数
     $('hCl').textContent=h.label; $('hC').textContent=h.value; }
-  { const bs=$('bSum'), sc=`SP ${g.summonCost()}`; if($('bSumC').textContent!==sc) $('bSumC').textContent=sc; bs.disabled=!g.canSummon(); }
+  { const bs=$('bSum'), sc=`SP ${g.summonCost()}`; if($('bSumC').textContent!==sc) $('bSumC').textContent=sc; bs.classList.toggle('dis',!g.canSummon()); }
   { const hh=heartsHtml(g.life); if($('hHearts').innerHTML!==hh) $('hHearts').innerHTML=hh; const sp=String(Math.floor(g.sp)); if($('hSP2').textContent!==sp) $('hSP2').textContent=sp; }
   { const bt=!!oppGame; if(document.body.classList.contains('battle')!==bt) document.body.classList.toggle('battle',bt); if(bt) bandHud(g); }
   refreshPU();
@@ -5210,7 +5675,8 @@ function bandHud(g){
   const bossOn=g.phaseName()==='boss'||g.phase==='intro', nb = g.phase==='intro' ? g.bossType : bossOn ? (g.boss?g.boss.bossType:g.bossType) : g.phase==='wave'?g.bossType:g.phase==='roll'&&!rollSpinning(g)?g.nextBossType:null;
   if(bandBoss!==nb){ bandBoss=nb; iconBoss($('bEmb'), nb); }
   let cls='', html;
-  if(deathAnnouncing(g)) html='<span class="dwtag">デスウェーブ開始</span>';
+  if(enrageAnnouncing(g)) html='<span class="ertag">ボスの狂暴化開始</span>';
+  else if(deathAnnouncing(g)) html='<span class="dwtag">デスウェーブ開始</span>';
   else if(bossOn){ cls='boss'; html=`ボス出現!<small>${nb?BOSSES[nb].name:''}${g.boss&&g.phase!=='intro'?'　'+Math.floor(g.t-g.boss.spawnT)+'秒':''}</small>`; }
   else if(g.phase==='wave'){ cls='tm'; html=mmss(g.bossAt-g.t); }        // ボス出現までの残り時間だけ（3.10.1〜）
   else if(g.phase==='roll'){ cls='tm'; html=mmss(g.rollUntil-g.t); }    // 次のウェーブ開始までの残り時間
@@ -5287,6 +5753,19 @@ $('bSum').onclick=()=>game.summon();
 document.addEventListener('contextmenu',e=>{ if(e.target.closest('canvas,button,.pu,.own,.band,.ohead')) e.preventDefault(); });
 for(const ev of ['gesturestart','gesturechange','gestureend']) document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 document.addEventListener('touchmove',e=>{ if(e.touches.length>1) e.preventDefault(); },{passive:false});
+// タップの扱い（Web版。オンライン対戦版 1.1.0 と同じ）：盤面まわり（.stage）では、ブラウザの既定の動き（ダブルタップの拡大など）を止めて、ボタンは自分で押す。
+//   iPhone では touch-action だけでは連打で画面が拡大・縮小することがあるため。指が動いた（スクロール）ときは押さない
+{ let tx=0, ty=0, moved=false;
+  const stage=document.querySelector('.stage');
+  stage.addEventListener('touchstart',e=>{ const t=e.touches[0]; tx=t.clientX; ty=t.clientY; moved=e.touches.length>1; },{passive:true});
+  stage.addEventListener('touchmove',e=>{ const t=e.touches[0]; if(Math.abs(t.clientX-tx)>10||Math.abs(t.clientY-ty)>10) moved=true; },{passive:true});
+  stage.addEventListener('touchend',e=>{
+    const el=e.target.closest&&e.target.closest('button,canvas,.hud,.band,.own,.pu,.ohead');
+    if(!el||moved) return;
+    if(e.cancelable) e.preventDefault();          // click の合成とダブルタップの拡大を止める
+    const b=e.target.closest('button'); if(b&&!b.disabled) b.click();
+  },{passive:false});
+  document.addEventListener('dblclick',e=>{ if(e.target.closest&&e.target.closest('.stage')) e.preventDefault(); },{passive:false}); }
 $('bPause').onclick=()=>{paused=!paused;$('bPause').textContent=paused?'▶':'⏸';};
 $('bAutoS').onclick=()=>{autoS=!autoS;$('bAutoS').classList.toggle('on',autoS);};
 $('bAutoM').onclick=()=>{autoM=!autoM;$('bAutoM').classList.toggle('on',autoM);};
@@ -5300,7 +5779,7 @@ $('bParamReset').onclick=resetParams;
 $('cVer').onchange=()=>{ buildDecks(true); fillFields(); buildBossUI(true); buildSeasonUI(); syncVersionUI(); syncSummaries(); };
 $('cHp').onchange=syncVersionUI;
 function fullText(){
-  const one=(g)=>g.flog.join('\n')+`\n--- 現在 ---\n[${g.wave}W ${g.t.toFixed(1)}s SP${Math.floor(g.sp)} ライフ${g.life}]\n`+g.boardStr();
+  const one=(g)=>(saveLog?'':'（ログを保存しない設定です。上の「ログを保存する」をオンにすると、そこから記録します）\n')+g.flog.join('\n')+`\n--- 現在 ---\n[${g.wave}W ${g.t.toFixed(1)}s SP${Math.floor(g.sp)} ライフ${g.life}]\n`+g.boardStr();
   return oppGame ? one(game)+'\n\n===== 相手側 =====\n'+one(oppGame) : one(game);
 }
 function showFull(){ const t=$('fullT'); const atEnd=t.scrollTop+t.clientHeight>=t.scrollHeight-20; t.value=fullText(); if(atEnd) t.scrollTop=t.scrollHeight; }
@@ -5726,26 +6205,26 @@ fillPoolSel();
 // ---------- リプレイ（記録の書き出し） ----------
 let recKey='';
 function recHud(){
-  if(!rec) return;
+  if(!rec){ syncRecUI(); return; }
   const key=rec.ops.length+':'+rec.checkpoints.length+':'+game.over; if(key===recKey) return; recKey=key;
   const nm=k=>{ const [sd,by]=k.includes(':')&&/^[01]:/.test(k)?[k[0],k.slice(2)]:[null,k];
     const who=by==='human'?'人':by==='auto'?'自動':by.replace(/^ai:/,'AI:'); return sd==null?who:(sd==='0'?'自分':'相手')+'・'+who; };
   const by=Object.entries(rec.actors).map(([k,v])=>`${nm(k)} ${v}`).join('・')||'なし';
   $('recInfo').textContent=`記録中${match?'（対戦）':''}：操作 ${rec.ops.length}件（${by}）／チェックポイント ${rec.checkpoints.length}件／シード ${match?match.seed:game.seed}／${RD.versionLabel(game.cfg)}`;
 }
-function replayData(){ rec.meta=Object.assign({}, rec.meta, {memo:$('recMemo').value||''}); return rec.toJSON(); }
+function replayData(){ if(!rec) return null; rec.meta=Object.assign({}, rec.meta, {memo:$('recMemo').value||''}); return rec.toJSON(); }
 function replayName(d){
   const p=n=>String(n).padStart(2,'0'), x=new Date();
   return `${d.format}_v${d.game.version}_${x.getFullYear()}${p(x.getMonth()+1)}${p(x.getDate())}-${p(x.getHours())}${p(x.getMinutes())}${p(x.getSeconds())}_W${d.result.wave}.json`;
 }
 $('bRecDl').onclick=()=>{
-  const d=replayData(), txt=JSON.stringify(d);
+  const d=replayData(); if(!d) return; const txt=JSON.stringify(d);
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=replayName(d);
   document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},2000);
   $('copyMsg').textContent=`書き出しました：${a.download}（${(txt.length/1024).toFixed(1)}KB）`;
 };
 $('bRecCopy').onclick=async()=>{
-  const txt=JSON.stringify(replayData()), t=$('fullT');
+  const d=replayData(); if(!d) return; const txt=JSON.stringify(d), t=$('fullT');
   try{ await navigator.clipboard.writeText(txt); $('copyMsg').textContent=`リプレイをコピーしました（${(txt.length/1024).toFixed(1)}KB）`; }
   catch(e){ t.value=txt; t.focus(); t.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){}
     $('copyMsg').textContent= ok?'リプレイをコピーしました':'自動でコピーできませんでした。欄にリプレイを表示したので、全選択してコピーしてください。'; }

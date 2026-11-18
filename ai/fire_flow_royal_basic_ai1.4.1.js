@@ -1,4 +1,4 @@
-// 炎フローロイヤル基本AI（炎フロイ）1.4（AI API v1／AI_AGENT_GUIDE 1.7.x・AIRandomDicesim 2.1.0〜2.5.3 用）
+// 炎フローロイヤル基本AI（炎フロイ）1.4.1（AI API v1／AI_AGENT_GUIDE 1.13.x・AIRandomDicesim 4.3.4 で確認）
 // 登録ID：fire_flow_royal_basic（ほかのAIと同時に読み込めるよう、IDを分けている）
 // 想定デッキ：炎・フロー・ロイヤル・成長・ジョーカー　想定フィールド：神々の楽園　想定する本家バージョン：どれでも
 // 対戦用（フロー・ロイヤルは対戦でしか効かない。練習では「相手のモンスターが中央を超えていない」扱い）
@@ -9,6 +9,18 @@
 //            合計出目の制限で、クリティカルマスの炎を合成に使うとそのマスの炎はなくなるとして数える（できるダイスは炎とは限らない）
 //       1.3　2Wで相手が中央の手前のとき、合成するフロー同士を出目1だけに
 //       1.4　2Wの出目上げの「クリティカルマスのダイス＋同じ出目のダイス」でジョーカー同士を合成しない（クリティカルマスのジョーカーは炎のコピーに使う）
+//       1.4.1　暗殺対面（相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがすべてある）を追加（炎フローAIフロー特化版 1.2 と同じ動き）。
+//              ファイル全体を (() => { … })(); で包んだ
+//
+// 暗殺対面（1.4.1。asnMode）：ほかの立ち回りは使わない。操作速度・判断速度を0.1秒に（判断の間隔・重ねる操作の間隔・召喚の間隔・ドラッグ時間。asnSpeed）
+//   1. 暗殺が飛んできたとき（着弾の早い順。ドラッグが着弾までに終わらないときはしない。ほかの暗殺の予告マスへは動かさない）
+//      炎：盤面の最後の炎（炎が1個）なら、同じ出目のジョーカーで炎をコピーする。それ以外の炎は避けない
+//      フロー・ロイヤル：懸賞金の付いていない同じ種類・同じ出目のダイスへ合成して逃がす
+//      ジョーカー：同じ出目の 炎 → ロイヤル → 成長 の順にコピーして避ける
+//      成長：避けない
+//   2. 召喚（盤面を広げる）
+//   3. こちらの先頭のモンスターが2つ目の角（8.5）を越えたら、フロー同士を合成（低い出目から）
+//   4. することがなければ炎の再点火（残り回数が最も少ない炎）
 //
 // 用語
 //   クリティカルマス：神々の楽園の会心マス（2つ）。楽園でなければクリティカルマスの規則は使わない
@@ -42,10 +54,26 @@
 //   フローLv4までPU → ロイヤルを打つ（高い出目から）→ 炎同士 → ジョーカーで全てフローをコピー
 //   打てるロイヤル（同じ出目のロイヤルの組）がなければ フローLv5までPU
 // 召喚：PUの目標があってSPが足りない間は召喚しない（options.saveForPU）
+(() => {
+'use strict';
+
+// 暗殺対面の判定：相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカーがすべて入っている
+const FFRB_ASN_DECK = ['bounty', 'assassin', 'sacrifice', 'adaptive', 'joker'];
+function ffrbIsAsn(info) {
+  const od = info && info.opponentDeck; if (!od) return false;
+  const ts = new Set(od.map(d => d.type));
+  return FFRB_ASN_DECK.every(t => ts.has(t));
+}
+
 RD.defineAgent('fire_flow_royal_basic', {
   name: '炎フローロイヤル基本AI',
-  desc: '炎・フロー・ロイヤル・成長・ジョーカー用（神々の楽園想定・対戦用）。炎の残り回数が3回（2W以降は6割）を切ったらかざして再点火。やることがないときも炎の再点火。様子見の間も召喚。1Wは盤面を埋め、出目2以下のジョーカーで成長をコピー、出目2成長があれば出目1のフロー同士・炎同士、埋まったら出目1のフロー同士、埋まっていなくても炎同士。2Wは様子見の間もクリティカルマスの炎の出目上げ（両方2以上か片方3以上まで。どちらかのクリティカルマスに炎を残す）、15秒後から相手の先頭が中央を超えていればフローLv3・ジョーカーでフローをコピー・炎同士・出目1ロイヤル、超えていなければ出目1のフロー同士・ジョーカーでロイヤルをコピー。3W以降は10秒様子見の後、フローLv4・ロイヤルを打つ・炎同士・ジョーカーでフローをコピー、打てるロイヤルがなければフローLv5。クリティカルマスのダイスは出目2以下なら向かって、3以上なら逃がして合成。炎は4個以上のときだけ合成し、クリティカル炎の合計を1Wは2以下・2W以降は3以下に下げない。',
+  desc: '炎・フロー・ロイヤル・成長・ジョーカー用（神々の楽園想定・対戦用）。炎の残り回数が3回（2W以降は6割）を切ったらかざして再点火。やることがないときも炎の再点火。様子見の間も召喚。1Wは盤面を埋め、出目2以下のジョーカーで成長をコピー、出目2成長があれば出目1のフロー同士・炎同士、埋まったら出目1のフロー同士、埋まっていなくても炎同士。2Wは様子見の間もクリティカルマスの炎の出目上げ（両方2以上か片方3以上まで。どちらかのクリティカルマスに炎を残す）、15秒後から相手の先頭が中央を超えていればフローLv3・ジョーカーでフローをコピー・炎同士・出目1ロイヤル、超えていなければ出目1のフロー同士・ジョーカーでロイヤルをコピー。3W以降は10秒様子見の後、フローLv4・ロイヤルを打つ・炎同士・ジョーカーでフローをコピー、打てるロイヤルがなければフローLv5。クリティカルマスのダイスは出目2以下なら向かって、3以上なら逃がして合成。炎は4個以上のときだけ合成し、クリティカル炎の合計を1Wは2以下・2W以降は3以下に下げない。暗殺対面（相手に懸賞金・暗殺・生贄・適応・ジョーカー）は速度0.1秒で、暗殺避け（最後の炎はジョーカーでコピー、フロー・ロイヤルは懸賞金のない同じダイスへ合成、ジョーカーは炎→ロイヤル→成長をコピー）→召喚→2角を越えたらフロー同士→することがなければ再点火。',
+  // 暗殺対面では操作速度・判断速度を asnSpeed 秒に（それ以外はシミュレータの設定のまま）
+  limits: (o, info) => (o.asnMode && o.asnSpeed && ffrbIsAsn(info)) ? { interval: o.asnSpeed, actInterval: o.asnSpeed, summonInterval: o.asnSpeed, dragTime: o.asnSpeed } : null,
   options: {
+    asnMode: true,           // 暗殺対面の動きにする（相手のデッキに懸賞金・暗殺・生贄・適応・ジョーカー）
+    asnSpeed: 0.1,           // 暗殺対面の操作速度・判断速度（秒）
+    asnCorner: 8.5,          // 暗殺対面：こちらの先頭のモンスターがこの位置（2つ目の角）を越えたらフロー同士を合成
     refuelBelow: 3,          // 1W：炎の残り回数がこれ未満なら再点火
     refuelRatio2: 0.6,       // 2W以降：炎の残り回数が最大のこの割合を切ったら再点火
     idleRefuel: true,        // やることがないときは炎の再点火
@@ -71,8 +99,9 @@ RD.defineAgent('fire_flow_royal_basic', {
     const NAME = { fire: '炎', flow: 'フロー', royal: 'ロイヤル', growth: '成長', joker: 'ジョーカー' };
     const nm = t => NAME[t] || t;
     let critCells = null; // 最初の観測で決める
+    const ASN = !!(o.asnMode && ffrbIsAsn(ctx.info));   // 暗殺対面
 
-    return { decide(obs) {
+    const normalDecide = (obs) => {
       if (obs.call > 0 && obs.results.some(r => r.reason === 'limit')) return null;
       const b = obs.board, ctl = obs.control || {}, W = obs.wave;
       let mem; try { mem = JSON.parse(obs.memory || '{}') || {}; } catch (e) { mem = {}; }
@@ -247,6 +276,70 @@ RD.defineAgent('fire_flow_royal_basic', {
       if ((m = firePairs()[0])) return act(m, mergeNote(m, '炎同士'));
       if ((a = jokerCopy('flow'))) return act(a, `ジョーカー${a.from}でフロー（出目${b[a.to].pips}）をコピー`);
       return idle(null);
-    } };
+    };
+
+    // ---------- 暗殺対面 ----------
+    const asnDone = new Map();   // 避けた暗殺（予告のキー → 避けたときの対象のダイスID）
+    const asnDecide = (obs) => {
+      if (obs.over) return null;
+      if (obs.call > 0 && obs.results.some(r => r.reason === 'limit')) return null;
+      const b = obs.board, ctl = obs.control || {};
+      const is = (i, t) => !!(b[i] && b[i].type === t);
+      const cells = t => [...Array(15).keys()].filter(i => is(i, t) && !b[i].sealed);
+      const legal = new Map(obs.legal.acts.map(a => [a.from * 15 + a.to, a]));
+      const find = (f, t, res) => { const a = legal.get(f * 15 + t); return a && a.result === res ? a : null; };
+      const actReady = !ctl.dragging && !(ctl.actReadyIn > 1e-9);
+      const act = (a, note) => ({ ops: [{ op: 'act', from: a.from, to: a.to, fromId: b[a.from].id, toId: b[a.to].id, expect: a.result }], more: true, note });
+      const dt = ctl.dragTime || 0;
+      // 1. 暗殺が飛んできた
+      const pend = (obs.pending || []).filter(p => p.kind === 'assassin' && p.cells && p.cells.length).sort((x, y) => x.in - y.in);
+      const pendCells = new Set(pend.flatMap(p => p.cells));
+      if (actReady) for (const p of pend) {
+        const cell = p.cells[0], d = b[cell];
+        if (!d || d.sealed || p.in <= dt + 0.02) continue;
+        const key = cell + ':' + Math.round((obs.t + p.in) * 10);
+        if (asnDone.has(key) && asnDone.get(key) !== d.id) continue;   // もう避けた（対象のダイスが変わった）
+        const safe = i => i !== cell && !pendCells.has(i);
+        let r = null;
+        if (d.type === 'fire') {
+          if (cells('fire').length === 1) {
+            for (const j of cells('joker')) { if (!safe(j)) continue; const a = find(j, cell, 'copy'); if (a) { r = act(a, `暗殺対面：最後の炎${d.pips}に暗殺。ジョーカー${j}で炎をコピー`); break; } }
+          }
+        } else if (d.type === 'flow' || d.type === 'royal') {
+          const c = cells(d.type).filter(x => safe(x) && b[x].pips === d.pips && !(b[x].bounty > 0)).map(x => find(cell, x, 'merge')).filter(Boolean)[0];
+          if (c) r = act(c, `暗殺対面：${nm(d.type)}${d.pips}に暗殺。懸賞金のない${nm(d.type)}（${c.to}）へ合成して逃がす`);
+        } else if (d.type === 'joker') {
+          for (const t of ['fire', 'royal', 'growth']) {
+            const c = cells(t).filter(x => x !== cell).map(x => find(cell, x, 'copy')).filter(Boolean)[0];
+            if (c) { r = act(c, `暗殺対面：ジョーカー${d.pips}に暗殺。${nm(t)}をコピーして避ける`); break; }
+          }
+        }
+        if (r) { asnDone.set(key, d.id); return r; }
+      }
+      // 2. 召喚（盤面を広げる）
+      if (obs.legal.summon && !(ctl.summonReadyIn > 1e-9)) return { ops: [{ op: 'summon' }], more: true, note: '暗殺対面：召喚' };
+      // 3. 先頭が2つ目の角を越えたらフロー同士を合成
+      const fpos = obs.front ? obs.front.pos : 0;
+      if (actReady && fpos > o.asnCorner) {
+        const L = cells('flow').filter(i => !pendCells.has(i)), res = [];
+        for (let x = 0; x < L.length; x++) for (let y = x + 1; y < L.length; y++) {
+          if (b[L[x]].pips !== b[L[y]].pips) continue;
+          const a = find(L[x], L[y], 'merge') || find(L[y], L[x], 'merge'); if (a) res.push(a);
+        }
+        res.sort((p, q) => b[p.from].pips - b[q.from].pips || p.from - q.from);
+        if (res[0]) return act(res[0], `暗殺対面：先頭が2つ目の角を越えたのでフロー同士（フロー${b[res[0].from].pips}、${res[0].from}→${res[0].to}）`);
+      }
+      // 4. することがなければ炎の再点火（残り回数が最も少ない炎）
+      const power = i => ((b[i].state && b[i].state.power) ?? 1);
+      const hov = obs.legal.hovers || [];
+      for (const f of cells('fire').filter(i => power(i) < 1 - 1e-9).sort((p, q) => power(p) - power(q))) {
+        const h = hov.filter(x => x.from === f && x.result === 'refuel').sort((p, q) => power(p.to) - power(q.to))[0];
+        if (h) return { ops: [{ op: 'hover', from: h.from, to: h.to }], more: true, note: `暗殺対面：することがないので再点火（${f}の炎を${h.to}の炎にかざす）` };
+      }
+      return null;
+    };
+
+    return { decide: obs => (ASN ? asnDecide(obs) : normalDecide(obs)) };
   },
 });
+})();
