@@ -970,7 +970,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '6.0.0ε';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '6.0.0ζ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -3917,55 +3917,82 @@ defineDice('kyokugen', { name: '極限', rar: 'H', ex: true, hidden: true, class
 // 祝福のダイス（EX。5.3.0〜、ユーザー指定：「祝福のダイス 仕様」）。総合環境（複合）だけ。既存の祝福スキン（フィールド 'blessing'）とは別物
 //   本体：攻撃力60・1.0秒・先頭。クラス・PUで何も変わらない
 //   祝福ゲージ（10で満タン）：祝福のダイスの合成（祝福どうし・適応と）で、合成前の出目だけ増える。出目7の祝福のダイスは1個ごとに20秒に+1（封印中は止まる）
-//   満タンごとに祝福効果を1つ（7種類から均等。コモン65%・レア30%・エピック5%）。超えた分は持ち越す
+//   満タンごとに祝福効果を1つ（6種類から均等。コモン65%・レア30%・エピック5%）。超えた分は持ち越す。1%で伝説の祝福（6.0.0ζ〜）
 //   効果は種類ごとに合計して、自分のすべてのダイスに試合中ずっとかかる（隣接バフとは別枠。各ダイス自身の基本性能に乗る）
 //     最終ダメージ：与えるダメージ×(1＋合計%)（5.4.1〜。5.4.0 までは基礎攻撃力に加算）／攻撃速度：攻撃回数×(1＋合計%)／クリダメ：会心ダメージに%ポイントで加算／クリ率：基本クリティカル率に加算
 //     撃破SP：敵を倒すたび（ボスも）／追加攻撃：弾1発ごとに確率（合計%）で、本来の対象以外のランダムな敵 k体（弾丸数の合計の切り捨て）へ同じ弾。会心率は通常どおり。スコープとは別判定・連鎖なし
 //   合計は10倍の整数（t10）で持つ（0.1 を足し続けたときの誤差を出さない）
 // =====================================================================
-const BLESS_KINDS = [
+const BLESS_KINDS = [ // 6.0.0ζ〜（「祝福のダイス_変更案（6.0.0ε→）」）：追加攻撃の確率はなくし、一律50%
   { id: 'dmg', name: '最終ダメージ', v: [5, 10, 50], unit: '%' }, // 5.4.1〜（5.4.0 まで：基本攻撃力 +1／+3／+6）
-  { id: 'spd', name: '基本攻撃速度', v: [3, 7, 15], unit: '%' },
+  { id: 'spd', name: '基本攻撃速度', v: [3, 7, 25], unit: '%' },
   { id: 'cd', name: '基本クリダメ', v: [100, 200, 1000], unit: '%' },
-  { id: 'crit', name: '基本クリ率', v: [1, 2, 5], unit: '%' },
-  { id: 'sp', name: '撃破時の獲得SP', v: [1, 2, 10], unit: '' },
-  { id: 'shots', name: '追加攻撃の弾丸数', v: [0.5, 1, 2], unit: '' },
-  { id: 'prob', name: '追加攻撃の確率', v: [1, 2, 4], unit: '%' }];
-const BLESS_RAR = ['コモン', 'レア', 'エピック'];
-defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color: '#d9a52e', atk: [60, 0, 0], spd: [1.0, 0], gaugeMax: 10, starEvery: 20, tripleP: 0.3, tripleMul: 3, // tripleP：合成でゲージが tripleMul 倍たまる確率（6.0.0γ〜）
-  kinds: BLESS_KINDS, rarities: BLESS_RAR,
-  desc: 'EX（複合のみ）。前方。合成すると出目の分だけ祝福ゲージがたまり（30%の確率で3倍）、10たまるごとにランダムな祝福効果（すべてのダイスに試合中ずっとかかる）を得る。出目7は20秒ごとにゲージ+1。',
-  state(g) { return g.vars.bless || (g.vars.bless = { gauge: 0, n: 0, t10: { dmg: 0, spd: 0, cd: 0, crit: 0, sp: 0, shots: 0, prob: 0 }, log: [], crit0: g.baseCrit }); },
-  setup(g) { // 乱数は使わない。合計が0の間は、どのフィルタも値を変えない
-    const B = this.state(g), t = B.t10;
+  { id: 'crit', name: '基本クリ率', v: [1, 2, 10], unit: '%' },
+  { id: 'sp', name: '撃破時の獲得SP', v: [1, 2, 10], unit: '%' },
+  { id: 'shots', name: '追加攻撃の弾丸数', v: [0.5, 1, 2], unit: '' }];
+const BLESS_RAR = ['コモン', 'レア', 'エピック', '伝説'];
+// 伝説の祝福（6.0.0ζ〜）：1%。出たら5つから均等に1つ
+const BLESS_LEGENDS = [
+  { id: 'royal', name: 'ロイヤル効果' },     // 合成した出目×2個の相手のダイスをロイヤルと同じく変化（星の+1なら出目7として14個）
+  { id: 'bubble', name: 'バブル付与' },      // いまの盤面のダイスすべてにバブル
+  { id: 'gauge', name: 'ゲージの最大値−1' }, // この試合中。重なる（下限1）
+  { id: 'five', name: '祝福効果を5つ獲得' }, // 通常の抽選を5回
+  { id: 'slot', name: '祝福のスロット' }];   // ランダムなマスに、試合中ずっと続くバフ
+defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color: '#d9a52e', atk: [60, 0, 0], spd: [1.0, 0], gaugeMax: 10, starEvery: 20,
+  gaugeMul: [{ p: 0.2, m: 3 }, { p: 0.1, m: 5 }], // 合成でゲージがたまる量の倍率（6.0.0ζ〜：20%で3倍・10%で5倍・残りは等倍）
+  legendP: 0.01, extraP: 0.5, gaugeMin: 1,         // 伝説の確率・追加攻撃の確率（一律）・ゲージの最大値の下限
+  slotDmg: 1.0, slotSpd: 1.0,                      // 祝福のスロット：最終ダメージ +100%・攻撃速度 +100%（祝福の合計に足す）・会心率は楽園のマスと同じ
+  kinds: BLESS_KINDS, rarities: BLESS_RAR, legends: BLESS_LEGENDS,
+  desc: 'EX（複合のみ）。前方。合成すると出目の分だけ祝福ゲージがたまり（20%で3倍・10%で5倍）、満タン（10）ごとにランダムな祝福効果（すべてのダイスに試合中ずっとかかる）を得る。1%で伝説の祝福（ロイヤル効果・バブル付与・ゲージ最大値−1・祝福効果5つ・祝福のスロット）。出目7は20秒ごとにゲージ+1。',
+  state(g) { return g.vars.bless || (g.vars.bless = { gauge: 0, n: 0, max: this.gaugeMax, t10: { dmg: 0, spd: 0, cd: 0, crit: 0, sp: 0, shots: 0 }, log: [], crit0: g.baseCrit, slots: [], legends: 0 }); },
+  maxOf(g) { const B = this.state(g); return B.max != null ? B.max : this.gaugeMax; },
+  slotAt(g, i) { const B = g.vars.bless; return !!B && !!B.slots && i >= 0 && B.slots.includes(i); },
+  slotCrit(g) { return 0.20 + 0.015 * (g.cfg.fieldLv || 0); }, // 神々の楽園のクリティカルマスと同じ（20%＋1.5%×フィールドLv）
+  setup(g) { // 乱数は使わない。合計が0の間（スロットがない間）は、どのフィルタも値を変えない
+    const B = this.state(g), t = B.t10, D = this;
+    if (!B.slots) B.slots = [];
     // 最終ダメージ（5.4.1〜）：D×(1＋合計%)。空虚など、ほかの最終ダメージへの加算とは足し算（D を元に別々に足す）。ハッキングの回復は対象外
+    //   祝福のスロットにいるダイスは +100% を足す（6.0.0ζ〜）
     g.addFilter('damage', (v, c) => {
-      if (!t.dmg || (c && c.die && (c.die.hacked || c.die.ixHack))) return v;
+      if (c && c.die && (c.die.hacked || c.die.ixHack)) return v;
+      const add = t.dmg / 1000 + (B.slots.length && c && c.die && B.slots.includes(g.board.indexOf(c.die)) ? D.slotDmg : 0);
+      if (!add) return v;
       const F = g.field(), vd = F.inVoid && c && c.enemy && F.inVoid(g, c.enemy) ? 1 + g.cfg.voidPct : 1; // 空虚がすでに掛かっていれば、元の D に戻して足す
-      return v + v / vd * t.dmg / 1000;
+      return v + v / vd * add;
     });
-    g.addFilter('interval', iv => iv / (1 + t.spd / 1000));
+    g.addFilter('interval', (iv, c) => { const add = t.spd / 1000 + (B.slots.length && c && B.slots.includes(c.i) ? D.slotSpd : 0); return add ? iv / (1 + add) : iv; });
     g.addFilter('critDmg', v => v + t.cd / 10);
-    g.addFilter('killSP', (v, c) => t.sp && c && c.enemy && ENEMY[c.enemy.kind].sp ? v + t.sp / 10 : v); // 亡霊などSPのない敵には付かない
-    g.addFilter('bossSP', v => v + t.sp / 10);
+    // 撃破SP（6.0.0ζ〜）：獲得SP×(1＋合計%)。増えた分の端数は切り上げ。亡霊などSPのない敵には付かない
+    const spUp = v => t.sp && v > 0 ? v + Math.ceil(v * t.sp / 1000 - 1e-9) : v;
+    g.addFilter('killSP', (v, c) => c && c.enemy && ENEMY[c.enemy.kind].sp ? spUp(v) : v);
+    g.addFilter('bossSP', v => spUp(v));
+    // 祝福のスロットの会心率：楽園のマスと同じ（ほかの会心バフ・マスとは大きいほう）
+    g.addFilter('buffs', (out, c) => { if (B.slots.length && c && B.slots.includes(c.i)) out.crit = Math.max(out.crit, g.baseCrit + D.slotCrit(g)); return out; });
   },
   init(g, d) { d.blessT = 0; },
-  tick(g, i, d, dt) { // 出目7：20秒に1回ゲージ+1（封印中は tick が呼ばれないので止まる）
+  tick(g, i, d, dt) { // 出目7：20秒に1回ゲージ+1（封印中は tick が呼ばれないので止まる）。倍率なし。伝説のロイヤル効果は出目7として数える
     if (d.pips !== 7) return;
     d.blessT += dt;
-    while (d.blessT >= this.starEvery - 1e-9) { d.blessT -= this.starEvery; this.addGauge(g, 1); }
+    while (d.blessT >= this.starEvery - 1e-9) { d.blessT -= this.starEvery; this.addGauge(g, 1, 7); }
   },
-  onMerge(g, m) { // 合成：出目の分だけゲージ。tripleP の確率で tripleMul 倍（6.0.0γ〜）
-    const tri = g.rng() < this.tripleP, n = m.pips * (tri ? this.tripleMul : 1);
+  onMerge(g, m) { // 合成：出目の分だけゲージ。20%で3倍・10%で5倍（6.0.0ζ〜）
+    const r = g.rng(); let mul = 1, acc = 0;
+    for (const x of this.gaugeMul) { acc += x.p; if (r < acc) { mul = x.m; break; } }
+    const n = m.pips * mul;
     g.addFx('blessOrb', { cell: m.to, n }, 1.3);
-    if (tri) { g.note(`祝福：ゲージ${this.tripleMul}倍（+${n}）`); g.emit('blessTriple', { cell: m.to, n }); }
-    this.addGauge(g, n);
-  }, // blessOrb：合成先から像へ上る粒（表示だけ。5.3.2〜）
-  addGauge(g, n) {
-    const B = this.state(g); B.gauge += n;
-    while (B.gauge >= this.gaugeMax) { B.gauge -= this.gaugeMax; this.grant(g); }
+    if (mul > 1) { g.note(`祝福：ゲージ${mul}倍（+${n}）`); g.emit('blessMul', { cell: m.to, n, mul }); }
+    this.addGauge(g, n, m.pips);
   },
-  grant(g) {
+  addGauge(g, n, pips) {
+    const B = this.state(g); B.gauge += n;
+    while (B.gauge >= this.maxOf(g)) { B.gauge -= this.maxOf(g); this.grant(g, pips); }
+  },
+  // 満タンになったとき：1%で伝説、残りは通常の効果
+  grant(g, pips) {
+    if (g.rng() < this.legendP) this.grantLegend(g, pips);
+    else this.grantNormal(g);
+  },
+  grantNormal(g) {
     const B = this.state(g), K = BLESS_KINDS[Math.floor(g.rng() * BLESS_KINDS.length)], r = g.rng(), rar = r < 0.05 ? 2 : r < 0.35 ? 1 : 0, v = K.v[rar];
     B.t10[K.id] += Math.round(v * 10); B.n++;
     if (K.id === 'crit') g.baseCrit = B.crit0 + B.t10.crit / 1000; // 基本クリティカル率（基礎5%＋シーズンダイス）に足す
@@ -3975,17 +4002,49 @@ defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color:
     g.note(`祝福：${K.name} +${v}${K.unit}（${BLESS_RAR[rar]}）`);
     g.emit('blessing', e);
   },
-  afterFire(g, i, d, shot, tgt) { // 追加攻撃（確率か弾丸数が足りない間は乱数を引かない）
-    const t = this.state(g).t10, k = Math.floor(t.shots / 10); if (k < 1 || !(t.prob > 0)) return;
-    if (!(g.rng() < t.prob / 1000)) return;
+  grantLegend(g, pips) {
+    const B = this.state(g); let L = BLESS_LEGENDS[Math.floor(g.rng() * BLESS_LEGENDS.length)];
+    const free = () => [...Array(g.board.length).keys()].filter(i => !B.slots.includes(i));
+    if (L.id === 'slot' && !free().length) { const o = BLESS_LEGENDS.filter(x => x.id !== 'slot'); L = o[Math.floor(g.rng() * o.length)]; } // 全マスに付いたあと：ほかの4つから
+    B.n++; B.legends = (B.legends || 0) + 1;
+    let detail = '';
+    if (L.id === 'royal') { // 相手の盤面のダイスを、合成した出目×2個（星の+1なら14個）ロイヤルと同じく変化。相手がいなければ何も起きない
+      const k = Math.max(1, Math.min(7, pips || 1)) * 2; B.lastRoyal = k; detail = `${k}個`;
+      g.castOpp('祝福のロイヤル', o => { if (!g.oppBlocked(o, '祝福のロイヤル')) this.royalStrike(g, o, k); });
+    } else if (L.id === 'bubble') { // いまの盤面のダイスすべてにバブル（性能はバブルの効果の既定どおり：デッキにあればそのクラス、なければクラス10・PU5）
+      const vs = g.diceCells(); for (const i of vs) g.board[i].bubble = true;
+      g.emit('bubbleOn', { cells: vs }); detail = `${vs.length}個`;
+    } else if (L.id === 'gauge') {
+      B.max = Math.max(this.gaugeMin, this.maxOf(g) - 1); detail = `最大${B.max}`;
+    } else if (L.id === 'slot') {
+      const F = free(), i = F[Math.floor(g.rng() * F.length)]; B.slots.push(i); detail = g.cellName(i);
+      g.addFx('blessSlot', { cell: i }, 1.6);
+    }
+    const e = { n: B.n, t: g.t, wave: g.wave, kind: 'legend', legend: L.id, name: `伝説：${L.name}`, detail, rarity: 3, value: null, unit: '' };
+    B.log.push(e);
+    g.addFx('blessGain', { text: `伝説！${L.name}${detail ? `（${detail}）` : ''}`, rar: 3, n: B.n }, 3.2);
+    g.note(`祝福：伝説の祝福「${L.name}」${detail ? `（${detail}）` : ''}`);
+    g.emit('blessing', e);
+    if (L.id === 'five') for (let k = 0; k < 5; k++) this.grantNormal(g); // 5つの中に伝説は出ない
+  },
+  // ロイヤルと同じ変化を、ちょうど k 個（盤面より多ければ全部）。g：使う側、o：相手
+  royalStrike(g, o, k) {
+    const vs = g.shuffle(o.diceCells()).slice(0, k);
+    for (const i of vs) { const d = o.board[i]; if (o.bubbleBlock(d, '相手の祝福のロイヤル')) continue; o.onRemoved(d, 'info'); o.board[i] = o.newDie(o.deckPick(g), d.pips); o.addFx('royalHit', { cell: i }, 0.5); }
+    g.note(`祝福のロイヤル → 相手${vs.length}個の種類を変更`);
+    o.note(`相手の祝福のロイヤル：${vs.length}個の種類が変わった`);
+  },
+  afterFire(g, i, d, shot, tgt) { // 追加攻撃（6.0.0ζ〜 確率は一律50%。弾丸数が1未満の間は乱数を引かない）
+    const t = this.state(g).t10, k = Math.floor(t.shots / 10); if (k < 1) return;
+    if (!(g.rng() < this.extraP)) return;
     const v = g.cfg.bulletSpeed > 0 ? g.cfg.bulletSpeed : 1e9, others = g.shuffle(g.alive().filter(e => e !== tgt)).slice(0, k);
     for (const e of others) { const [qx, qy] = g.posXY(e.pos); g.shots.push(Object.assign({}, shot, { at: g.t + Math.hypot(qx - shot.x, qy - shot.y) / v, tgt: e, extra: true, bless: true })); }
     if (others.length) g.addFx('scopeProc', { cell: i }, 0.05);
   },
   totals(g) { const t = this.state(g).t10, o = {}; for (const K of BLESS_KINDS) o[K.id] = t[K.id] / 10; return o; },
   deckObserve(g) { const B = this.state(g);
-    return { gauge: B.gauge, gaugeMax: this.gaugeMax, blessings: B.n, total: this.totals(g), extraShots: Math.floor(B.t10.shots / 10),
-      recent: B.log.slice(-10).map(e => ({ n: e.n, t: e.t, wave: e.wave, kind: e.kind, rarity: e.rarity, value: e.value })) }; },
+    return { gauge: B.gauge, gaugeMax: this.maxOf(g), blessings: B.n, legends: B.legends || 0, slots: (B.slots || []).slice(), total: this.totals(g), extraShots: Math.floor(B.t10.shots / 10), extraProb: this.extraP,
+      recent: B.log.slice(-10).map(e => ({ n: e.n, t: e.t, wave: e.wave, kind: e.kind, legend: e.legend, rarity: e.rarity, value: e.value })) }; },
   observe(g, d) { return { starLeft: d.pips === 7 ? this.starEvery - d.blessT : null }; } });
 
 // =====================================================================
@@ -5355,7 +5414,7 @@ V('fx', 'bmSplash', { latestBy: 'die', draw({ ctx, X, Y, S }, g, f, a) {
   ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(X(x), Y(y), R, 0, 7); ctx.fill(); } });
 // 祝福のダイス（5.3.0〜）：クリーム色の面に金の枠、四つ角の星と小さな星4つ、下に月桂樹の葉。
 //   像（over）：2つ目の角の先のレーン中央の上に浮かぶ、顔がダイスの羽つきの金の像と台。祝福ゲージを持つ。タップで祝福の一覧（panel）
-const BLESS_COL = ['#ffffff', '#5ee06a', '#c58bff']; // コモン白・レア緑・エピック紫
+const BLESS_COL = ['#ffffff', '#5ee06a', '#c58bff', '#ff9a1a']; // コモン白・レア緑・エピック紫・伝説オレンジ（6.0.0ζ〜）
 function star4(ctx, x, y, R, r) { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, q = k % 2 ? r : R; ctx[k ? 'lineTo' : 'moveTo'](x + q * Math.cos(a), y + q * Math.sin(a)); } ctx.closePath(); }
 V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422', // 出目の点の中は金色（6.0.0δ〜。ふちは白のまま）
   glyph(p, x, y, r, c) { const ctx = p.ctx; ctx.fillStyle = c; star4(ctx, x, y, r * 1.05, r * 0.3); ctx.fill();
@@ -5382,22 +5441,41 @@ V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422
     ctx.fillStyle = '#fffbe9'; ctx.strokeStyle = G; ctx.lineWidth = Math.max(1.5, 0.03 * S); p.roundRect(x - 0.11 * S, y - 0.24 * S, 0.22 * S, 0.22 * S, 0.04 * S); ctx.fill(); ctx.stroke();
     ctx.fillStyle = GD; for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); ctx.arc(x + dx * 0.045 * S, y - 0.13 * S + dy * 0.045 * S, 0.018 * S, 0, 7); ctx.fill(); }
     // ゲージ
-    const gw = 0.5 * S, gh = 0.085 * S, gx = x - gw / 2, gy = y + 0.34 * S, k = Math.max(0, Math.min(1, B.gauge / 10));
+    const GM = RD.DICE.blessdice.maxOf(g), gw = 0.5 * S, gh = 0.085 * S, gx = x - gw / 2, gy = y + 0.34 * S, k = Math.max(0, Math.min(1, B.gauge / GM));
     ctx.fillStyle = 'rgba(20,24,34,.85)'; p.roundRect(gx, gy, gw, gh, gh / 2); ctx.fill();
     if (k > 0) { ctx.fillStyle = '#58b8ff'; p.roundRect(gx + 1, gy + 1, Math.max(gh - 2, (gw - 2) * k), gh - 2, (gh - 2) / 2); ctx.fill(); }
     ctx.textAlign = 'center'; ctx.font = `900 ${0.17 * S}px sans-serif`; ctx.lineWidth = Math.max(2, 0.04 * S); ctx.strokeStyle = 'rgba(10,12,18,.9)'; ctx.fillStyle = '#ffffff';
-    const tx = `${B.gauge}/10`; ctx.strokeText(tx, x, gy + gh + 0.17 * S); ctx.fillText(tx, x, gy + gh + 0.17 * S);
+    const tx = `${B.gauge}/${GM}`; ctx.strokeText(tx, x, gy + gh + 0.17 * S); ctx.fillText(tx, x, gy + gh + 0.17 * S);
     ctx.restore();
+    // 祝福のスロット（6.0.0ζ〜）：ダイスのないスロットは、金色の輪と光（ダイスがあるときは cellUnder で回る円弧）
+    if (B.slots && B.slots.length) for (const i of B.slots) { if (g.board[i]) continue;
+      const [cx, cy] = g.cellXY(i), px = X(cx), py = Y(cy), s = 0.7 * S, a = p.now / 1200;
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.strokeStyle = '#f0b429'; ctx.lineWidth = Math.max(1.5, 0.03 * S); ctx.setLineDash([0.08 * S, 0.06 * S]); ctx.lineDashOffset = -a * 0.4 * S;
+      p.roundRect(px - s / 2 + 4, py - s / 2 + 4, s - 8, s - 8, 0.1 * S); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,214,90,.16)'; p.roundRect(px - s / 2 + 4, py - s / 2 + 4, s - 8, s - 8, 0.1 * S); ctx.fill();
+      ctx.fillStyle = '#f0b429'; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(p.now / 300); star4(ctx, px, py, 0.13 * S, 0.04 * S); ctx.fill(); ctx.restore();
+      p.orbit(px, py, s, ['#f0b429', '#fff1b8'], -1, 'comet', 2400, 0.95); }
   },
-  // 像をタップしたときの一覧（黒い背景。コモン白・レア緑・エピック紫）
+  // 祝福のスロットにいるダイス（6.0.0ζ〜）：枠の色の円弧が回る（陰陽・太陽と同じ形）
+  cellUnder(p, g, d, i, px, py, s, C) { if (RD.DICE.blessdice.slotAt(g, i)) p.orbit(px, py, s, [C, p.mix(C, '#ffffff', 0.55)], -1, 'comet', 1800, 1.08); },
+  // 像をタップしたときの一覧（黒い背景。コモン白・レア緑・エピック紫・伝説オレンジ）
   panel(g) {
     const B = g.vars.bless, D = RD.DICE.blessdice; if (!B) return '';
-    const t = D.totals(g), f = v => (Math.round(v * 10) / 10).toString();
+    const t = D.totals(g), f = v => (Math.round(v * 10) / 10).toString(), GM = D.maxOf(g);
     const tot = D.kinds.map(K => `<div class="bl-row"><span>${K.name}</span><b>+${f(t[K.id])}${K.unit}</b></div>`).join('');
-    const ex = `<div class="bl-note">追加攻撃：弾1発ごとに ${f(t.prob)}% で、ほかの敵 ${Math.floor(t.shots)}体へ（弾丸数は切り捨て）</div>`;
-    const log = B.log.slice().reverse().map(e => `<div class="bl-log" style="color:${BLESS_COL[e.rarity]}">#${e.n}　${e.wave}W ${e.t.toFixed(0)}s　${e.name} +${e.value}${e.unit}<small>${D.rarities[e.rarity]}</small></div>`).join('') || '<div class="bl-note">まだ祝福はありません</div>';
-    return `<h4>祝福　<small>ゲージ ${B.gauge}/10　獲得 ${B.n}回</small></h4><div class="bl-sec">いまの合計（すべてのダイスにかかる）</div>${tot}${ex}<div class="bl-sec">獲得した祝福（新しい順）</div>${log}<div class="bl-close">タップで閉じる</div>`;
+    const ex = `<div class="bl-note">追加攻撃：弾1発ごとに ${Math.round(D.extraP * 100)}% で、ほかの敵 ${Math.floor(t.shots)}体へ（弾丸数は切り捨て）</div>`;
+    const sl = B.slots && B.slots.length ? `<div class="bl-note" style="color:${BLESS_COL[3]}">祝福のスロット：${B.slots.map(i => g.cellName(i)).join('、')}（最終ダメージ+${D.slotDmg * 100}%・攻撃速度+${D.slotSpd * 100}%・会心率${Math.round(D.slotCrit(g) * 1000) / 10}%）</div>` : '';
+    const log = B.log.slice().reverse().map(e => e.kind === 'legend'
+      ? `<div class="bl-log" style="color:${BLESS_COL[3]}">#${e.n}　${e.wave}W ${e.t.toFixed(0)}s　${e.name}${e.detail ? `（${e.detail}）` : ''}<small>伝説</small></div>`
+      : `<div class="bl-log" style="color:${BLESS_COL[e.rarity]}">#${e.n}　${e.wave}W ${e.t.toFixed(0)}s　${e.name} +${e.value}${e.unit}<small>${D.rarities[e.rarity]}</small></div>`).join('') || '<div class="bl-note">まだ祝福はありません</div>';
+    return `<h4>祝福　<small>ゲージ ${B.gauge}/${GM}　獲得 ${B.n}回${B.legends ? `（伝説 ${B.legends}回）` : ''}</small></h4><div class="bl-sec">いまの合計（すべてのダイスにかかる）</div>${tot}${ex}${sl}<div class="bl-sec">獲得した祝福（新しい順）</div>${log}<div class="bl-close">タップで閉じる</div>`;
   } });
+// 祝福のスロットができた瞬間：マスに金色の光が広がる（6.0.0ζ〜）
+V('fx', 'blessSlot', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
+  const [cx, cy] = g.cellXY(f.cell), x = X(cx), y = Y(cy), t = 1 - a;
+  ctx.save(); ctx.globalAlpha = Math.min(1, a * 2); ctx.strokeStyle = '#ffb020'; ctx.lineWidth = Math.max(2, 0.05 * S * a);
+  ctx.beginPath(); ctx.arc(x, y, (0.2 + t * 0.6) * S, 0, 7); ctx.stroke();
+  ctx.fillStyle = `rgba(255,200,60,${0.35 * a})`; ctx.beginPath(); ctx.arc(x, y, 0.4 * S, 0, 7); ctx.fill(); ctx.restore(); } });
 // 祝福を得たときの表示：像の上に、何を得たかをレアリティの色で（2.4秒）
 // 祝福の合成：合成先のマスから、出目の数だけ大きな光の粒が高く昇り、尾を引いて像（エンチャント台）に入る（1.3秒。5.4.1〜 大きく・高く・尾を長く）
 V('fx', 'blessOrb', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
@@ -5989,7 +6067,12 @@ class Session {
     // 実盤面：送り込み・亡霊・懸賞金の回収は知らせる（写しにも先に入れる）。合成の妨害は操作ごと送る（input）
     hide(me, 'toOpp', function (n) { P.toOpp.call(this, n); S.send({ t: 'e', k: 's', v: n }); });
     hide(me, 'sendGhost', function () { P.sendGhost.call(this); S.send({ t: 'e', k: 'g', v: 1 }); });
-    hide(me, 'castOpp', function (name, fn) { if (S.inOp) S.opCast = true; return P.castOpp.call(this, name, fn); });
+    hide(me, 'castOpp', function (name, fn) {
+      if (S.inOp) S.opCast = true;
+      // 操作ではないところ（祝福の星の+1で満タン → 伝説のロイヤル効果。6.0.0ζ〜）から出た妨害は、相手が操作のやり直しで出せないので、個数を知らせる
+      else if (name === '祝福のロイヤル' && !S.standin) { const B = this.vars.bless; S.send({ t: 'e', k: 'R', v: B && B.lastRoyal || 14 }); }
+      return P.castOpp.call(this, name, fn);
+    });
     hide(me, 'releaseToOpp', function (list) { if (S.inOp) S.opCast = true; return P.releaseToOpp.call(this, list); });
     me.on('bountyPaid', p => { if (p && p.sp > 0) S.send({ t: 'e', k: 'b', v: p.sp }); });
     // 懸賞金の回収が写しの上で起きた（自分の印付きダイスが相手の盤面に…ではなく、相手の盤面の印付きダイスが消えた）：自分の実盤面に入ったSPは取り消す。
@@ -6163,6 +6246,11 @@ class Session {
     const at = g.t + Math.max(0, g.cfg.sendDelay - this.lat);
     if (k === 's') { if (g.phase === 'wave') for (let i = 0; i < Math.min(60, v); i++) g.sendQueue.push(at); }
     else if (k === 'g') { if (['wave', 'intro', 'boss'].includes(g.phase)) for (let i = 0; i < Math.min(60, v); i++) g.ghostQ.push(at); }
+    else if (k === 'R') { // 相手の盤面の祝福（星）から出た伝説のロイヤル効果：自分の実盤面で、ロイヤルと同じ変化を v 個（プラズマ・プリズムも自分の側で判定）
+      const mir = this.mir, D = RD.DICE.blessdice; if (!D || !mir) return;
+      const F = mir.field(), n = F.repeatOpp && F.repeatOpp(mir) ? 2 : 1;
+      for (let i = 0; i < n; i++) if (!mir.oppBlocked(g, '祝福のロイヤル')) D.royalStrike(mir, g, Math.min(14, v));
+    }
     else if (k === 'b') { const sp = Math.min(1e6, v); g.sp += sp; if (g.ws) g.ws.spOther += sp; g.note(`懸賞金の回収：+${sp}SP`); }
   }
   onPeerOver(msg) {
@@ -7319,6 +7407,7 @@ function drawDie(g,d,px,py,i){
   if(act){ if(V.active) V.active(P,g,d,px,py,s); else if(D.activeGlow) glow(px,py,s,D.activeGlow,pulse); }
   const orb=V.orbit?V.orbit(g,d,i):null;
   if(orb) orbitArcs(px,py,s,orb.cols,orb.dir||1,orb.shape||'comet',orb.period||2000,orb.size);
+  if(i>=0) for(const t of g.cfg.deck){ const DV=DICE[t].view; if(DV&&DV.cellUnder) DV.cellUnder(P,g,d,i,px,py,s,C); } // マスに付くもの（祝福のスロット。6.0.0ζ〜）
   if(V.aura) for(const a of (V.aura(g,d,i)||[])) glow(px,py,s,a.col,pulse*(a.k||1),a.inset||0);
   // 立体のタイル：影 → 側面（主色を暗く）→ 上面（白からほんのり主色へのグラデーション）
   const x=x0+2, y=y0+2, w=s-4, h=s-4, rr=0.12*S, dep=0.055*S, fh=h-dep;
