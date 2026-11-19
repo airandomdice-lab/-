@@ -970,7 +970,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '6.0.0γ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '6.0.0δ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -5357,7 +5357,7 @@ V('fx', 'bmSplash', { latestBy: 'die', draw({ ctx, X, Y, S }, g, f, a) {
 //   像（over）：2つ目の角の先のレーン中央の上に浮かぶ、顔がダイスの羽つきの金の像と台。祝福ゲージを持つ。タップで祝福の一覧（panel）
 const BLESS_COL = ['#ffffff', '#5ee06a', '#c58bff']; // コモン白・レア緑・エピック紫
 function star4(ctx, x, y, R, r) { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, q = k % 2 ? r : R; ctx[k ? 'lineTo' : 'moveTo'](x + q * Math.cos(a), y + q * Math.sin(a)); } ctx.closePath(); }
-V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true,
+V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422', // 出目の点の中は金色（6.0.0δ〜。ふちは白のまま）
   glyph(p, x, y, r, c) { const ctx = p.ctx; ctx.fillStyle = c; star4(ctx, x, y, r * 1.05, r * 0.3); ctx.fill();
     for (const [dx, dy] of [[-0.75, -0.7], [0.75, -0.7], [-0.75, 0.7], [0.75, 0.7]]) { star4(ctx, x + dx * r, y + dy * r, r * 0.28, r * 0.09); ctx.fill(); } },
   deco({ ctx, S }, g, d, b, C) { // 月桂樹の葉（面の下の左右）
