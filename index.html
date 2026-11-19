@@ -5940,6 +5940,7 @@ document.addEventListener('touchmove',e=>{ if(e.touches.length>1) e.preventDefau
   stage.addEventListener('touchend',e=>{
     const el=e.target.closest&&e.target.closest('button,canvas,.hud,.band,.own,.pu,.ohead');
     if(!el||moved) return;
+    if(e.target.closest('select,input,textarea,label,option')) return; // 選択欄・入力欄（倍速など）は、ブラウザの既定の動きのまま
     if(e.cancelable) e.preventDefault();          // click の合成とダブルタップの拡大を止める
     const b=e.target.closest('button'); if(b&&!b.disabled) b.click();
   },{passive:false});
