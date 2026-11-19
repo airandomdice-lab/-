@@ -1,10 +1,10 @@
-// 対戦相手のプール「EXMatching（写し）」（AIRandomDicesim 4.3.7 で書き出し）
+// 対戦相手のプール「EXMatching（写し）」（AIRandomDicesim 5.0.1 で書き出し）
 // Battlepool フォルダに置き、Battlepool/index.js の RD_POOL_FILES に並べると、開いたときに読み込まれます
 RD.definePool("my_pool_copy", {
   "format": "rd-battle-pool",
   "formatVersion": 1,
   "id": "my_pool_copy",
-  "name": "EXMatchingてんしさん",
+  "name": "EXMatching",
   "desc": "",
   "entries": [
     {
@@ -6189,6 +6189,206 @@ RD.definePool("my_pool_copy", {
       "traits": {},
       "cd": 3000,
       "field": "plasma",
+      "fieldLv": 20
+    },
+    {
+      "name": "月ロイ",
+      "weight": 10,
+      "ai": "moonsun_royal_ranker",
+      "aiOptions": {
+        "thinkTime": 0.5,
+        "opTime": 0.3,
+        "corner1": 3.5,
+        "center": 6,
+        "corner2": 8.5,
+        "laneMid": 10.25,
+        "lowMoonMerge": 2,
+        "makeRoom": [
+          [
+            "royal",
+            3
+          ],
+          [
+            "moon",
+            2
+          ],
+          [
+            "royal",
+            2
+          ],
+          [
+            "moon",
+            1
+          ],
+          [
+            "royal",
+            1
+          ],
+          [
+            "sun",
+            1
+          ]
+        ],
+        "firstSummons": 4,
+        "saveSummons": 7,
+        "growWatch": 3,
+        "growLast": 1,
+        "growMaxPips": 3,
+        "last10": 10,
+        "last10Late": 15,
+        "last10LateFrom": 7,
+        "royalFlag": "auto",
+        "asnMode": true,
+        "asnSpeed": 0.1,
+        "asnCorner": 8.5,
+        "royalCopySummons": 7,
+        "starAwayPips": 5,
+        "knightCut": 1,
+        "keepJokerFrom": 6,
+        "oppWeakFrom": 6,
+        "oppWeakAhead": 2,
+        "sunLostLongFrom": 8,
+        "knightMoonOff": 6,
+        "growStop": 3,
+        "tripleCopy": 3,
+        "halfLimit": 0.5,
+        "laneEndLimit": 0.2,
+        "aheadWaves": 3,
+        "holdBelow": 4,
+        "holdUntil": 7,
+        "puMargin": 4
+      },
+      "control": {
+        "interval": 1,
+        "maxOps": 1,
+        "summonInterval": 1,
+        "actInterval": 1,
+        "dragTime": 1
+      },
+      "deck": [
+        "moon",
+        "sun",
+        "royal",
+        "growth",
+        "joker"
+      ],
+      "cls": {
+        "moon": 14,
+        "sun": 12,
+        "royal": 12,
+        "growth": 12,
+        "joker": 12
+      },
+      "startLv": {
+        "moon": 1,
+        "sun": 1,
+        "royal": 1,
+        "growth": 1,
+        "joker": 1
+      },
+      "traits": {},
+      "cd": 4000,
+      "field": "plasma",
+      "fieldLv": 20
+    },
+    {
+      "name": "コロシアム月ロイ",
+      "weight": 6,
+      "ai": "moonsun_royal_ranker",
+      "aiOptions": {
+        "thinkTime": 0.5,
+        "opTime": 0.3,
+        "corner1": 3.5,
+        "center": 6,
+        "corner2": 8.5,
+        "laneMid": 10.25,
+        "lowMoonMerge": 2,
+        "makeRoom": [
+          [
+            "royal",
+            3
+          ],
+          [
+            "moon",
+            2
+          ],
+          [
+            "royal",
+            2
+          ],
+          [
+            "moon",
+            1
+          ],
+          [
+            "royal",
+            1
+          ],
+          [
+            "sun",
+            1
+          ]
+        ],
+        "firstSummons": 4,
+        "saveSummons": 7,
+        "growWatch": 3,
+        "growLast": 1,
+        "growMaxPips": 3,
+        "last10": 10,
+        "last10Late": 15,
+        "last10LateFrom": 7,
+        "royalFlag": "auto",
+        "asnMode": true,
+        "asnSpeed": 0.1,
+        "asnCorner": 8.5,
+        "royalCopySummons": 7,
+        "starAwayPips": 5,
+        "knightCut": 1,
+        "keepJokerFrom": 6,
+        "oppWeakFrom": 6,
+        "oppWeakAhead": 2,
+        "sunLostLongFrom": 8,
+        "knightMoonOff": 6,
+        "growStop": 3,
+        "tripleCopy": 3,
+        "halfLimit": 0.5,
+        "laneEndLimit": 0.2,
+        "aheadWaves": 3,
+        "holdBelow": 4,
+        "holdUntil": 7,
+        "puMargin": 4
+      },
+      "control": {
+        "interval": 1,
+        "maxOps": 1,
+        "summonInterval": 1,
+        "actInterval": 1,
+        "dragTime": 1
+      },
+      "deck": [
+        "moon",
+        "sun",
+        "royal",
+        "growth",
+        "joker"
+      ],
+      "cls": {
+        "moon": 14,
+        "sun": 12,
+        "royal": 12,
+        "growth": 12,
+        "joker": 12
+      },
+      "startLv": {
+        "moon": 1,
+        "sun": 1,
+        "royal": 1,
+        "growth": 1,
+        "joker": 1
+      },
+      "traits": {},
+      "cd": 4000,
+      "field": "colosseum_710",
       "fieldLv": 20
     }
   ]
