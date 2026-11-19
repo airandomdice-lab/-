@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
-<title>ランダムダイス 練習・対戦シミュレータ AIRandomDicesim 4.3.7（Web版）</title>
+<title>ランダムダイス 練習・対戦シミュレータ AIRandomDicesim 5.0.1（Web版）</title>
 <style>
 /* ===== 見た目（CSS）=====
    色・角丸・間隔は :root の変数で決める。画面の構成：.app（左：盤面と操作 .stage ／ 右：タブとパネル .side）。
@@ -110,6 +110,16 @@ body.battle .hud{display:none}
 .ohead .odeck span{font-size:9px;font-weight:900;color:#cfd6e4;line-height:1.1}
 .ohead .odeck span.max{color:#f2c94c}
 .ohead .osp{font-size:11px;color:var(--sub);white-space:nowrap}
+/* 画面のガタつき対策（4.3.8〜）：自分の盤面より上にあるもの（相手の見出し・相手の情報欄・帯）の高さを、中身が変わっても変わらないように固定する */
+.ohead{flex-wrap:nowrap;height:38px;overflow:hidden;width:100%;max-width:100%;box-sizing:border-box}
+.ohead>*{flex:none}
+.ohead .on{flex:0 1 auto}
+.ohead .odeck{flex:none}
+.ohead .osp{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis} /* 長いときは名前・SPの側を省略して、デッキは切らない */
+.opp:not(.big) .oinfo{contain:size;min-height:0} /* 縮小のとき、情報欄の行数が増えても盤面の高さ以上にならない */
+.band{flex:none;min-height:28px;max-height:28px}
+.band .bst{overflow:hidden;text-overflow:ellipsis;max-width:70%}
+#cv,#cvO{flex:none}
 .ev{font-size:11px;color:var(--sub);max-height:140px;overflow-y:auto;margin-top:var(--gap)}
 
 /* ---- タブとパネル ---- */
@@ -226,7 +236,7 @@ tr.plrow{cursor:pointer} tr.plrow.on td{background:#2a2f45}
           <option value="practice">練習（相手は湧き方のパターン）</option>
           <option value="pvai">対戦：人 対 AI</option>
           <option value="aivai">対戦：AI 対 AI（観戦・検証）</option>
-          <option value="rpvai">ランダム対戦：人 対 AI（相手はプールから）</option>
+          <option value="rpvai" selected>ランダム対戦：人 対 AI（相手はプールから）</option>
           <option value="raivai">ランダム対戦：AI 対 AI（相手はプールから）</option>
           <option value="rpool">ランダム対戦：プール 対 プール（両方プールから）</option>
         </select></label>
@@ -404,7 +414,7 @@ tr.plrow{cursor:pointer} tr.plrow.on td{background:#2a2f45}
       </details>
       <details class="sec">
         <summary>本家バージョン</summary>
-        <p class="note">・v6.0.5：1.26.0 と同じ対戦仕様（HP増加は2021年5月の式、ダイス・スキンも同じ）。<br>・v6.5.0（過熱シーズン）：雑魚HPの1段あたりの増加幅が (W+4)/5 倍（2W以降 20(W−1)(W+4)(W+6)、1Wは100）。時間の仕組み・中ボス5倍は同じ。ダイスに 過熱・壊れた成長・ランダム成長・死・核・地獄 が加わる。ボスにスライム（本家は v6.4.0 で追加）が加わる。10W からデスウェーブ（敵の速度+20%、ボスの1回目のスキルが1.5秒後）。中ボスと高速（スピードモンスター）は3Wから、決まった残り時間に1体ずつ出る（3W：53・37・21・5秒、4W：45・31・17・2秒、5W以降：47・35・23・11秒。高速は中ボスの0.5秒後）。高速は倒しても通しても相手に送られず、送り込みはすべて通常モンスター。<br>・v6.6.5（祝福核全盛期）：6.5.0 と同じHP・デスウェーブに、祝福・水晶6.6.5・早い寒波・シーズンダイス（コンボ・吹雪）。<br>・v6.7.2（パーティーシーズン）：6.6.5 と同じHP・デスウェーブ・祝福・水晶など。シーズンダイスは成長・召喚。20ウェーブからボスの狂暴化（k＝ウェーブ−20。スネーク：召喚HP+k×5%・召喚位置がk÷10前へ／サイレント：封印+k÷2個／ランダムナイト：倒れたときにもう一度変更／マジシャン：メテオ予告中の被ダメージ−k×5%／レオン：咆哮の個数と下がる出目+k÷10、倒れたときも咆哮／IIIIIIIIII：ハッキング予告中の被ダメージ−k×5%、ハッキングが永続／スライム：分裂数+k÷10／バジリスク：召喚するボスも狂暴化。÷は切り捨て）。狂暴化以降の撃破SPは20W基準。新ダイス 地震・雪玉。死・地獄の亡霊が出る即死のSPは70%、コンボの基本攻撃力・フローの加速が強化。<br>・複合：すべてのバージョンのダイス・スキン・HP増加の仕様を選べます。名前の隣の（6.0.5）などは、その仕様が最初に入ったバージョンです。バージョンで仕様が違うものは、それぞれのバージョンが別の項目として並びます。</p>
+        <p class="note">・v6.0.5：1.26.0 と同じ対戦仕様（HP増加は2021年5月の式、ダイス・スキンも同じ）。<br>・v6.5.0（過熱シーズン）：雑魚HPの1段あたりの増加幅が (W+4)/5 倍（2W以降 20(W−1)(W+4)(W+6)、1Wは100）。時間の仕組み・中ボス5倍は同じ。ダイスに 過熱・壊れた成長・ランダム成長・死・核・地獄 が加わる。ボスにスライム（本家は v6.4.0 で追加）が加わる。10W からデスウェーブ（敵の速度+20%、ボスの1回目のスキルが1.5秒後）。中ボスと高速（スピードモンスター）は3Wから、決まった残り時間に1体ずつ出る（3W：53・37・21・5秒、4W：45・31・17・2秒、5W以降：47・35・23・11秒。高速は中ボスの0.5秒後）。高速は倒しても通しても相手に送られず、送り込みはすべて通常モンスター。<br>・v6.6.5（祝福核全盛期）：6.5.0 と同じHP・デスウェーブに、祝福・水晶6.6.5・早い寒波・シーズンダイス（コンボ・吹雪）。<br>・v6.7.2（パーティーシーズン）：6.6.5 と同じHP・デスウェーブ・祝福・水晶など。シーズンダイスは成長・召喚。20ウェーブからボスの狂暴化（k＝ウェーブ−20。スネーク：召喚HP+k×5%・召喚位置がk÷10前へ／サイレント：封印+k÷2個／ランダムナイト：倒れたときにもう一度変更／マジシャン：メテオ予告中の被ダメージ−k×5%／レオン：咆哮の個数と下がる出目+k÷10、倒れたときも咆哮／IIIIIIIIII：ハッキング予告中の被ダメージ−k×5%、ハッキングが永続／スライム：分裂数+k÷10／バジリスク：召喚するボスも狂暴化。÷は切り捨て）。狂暴化以降の撃破SPは20W基準。新ダイス 地震・雪玉。死・地獄の亡霊が出る即死のSPは70%、コンボの基本攻撃力・フローの加速が強化。<br>・v7.1.0（ユニバースシーズン）：6.7.2 と同じHP・デスウェーブ・狂暴化・祝福など。シーズンダイスは陰陽・砂。新ダイス 充電（PUボタンで充電⇔放出）。砂の特性「砂嵐」。台風の調整。コロシアムは7秒ごとに砂を置き、砂は20秒残る。<br>・複合：すべてのバージョンのダイス・スキン・HP増加の仕様を選べます。名前の隣の（6.0.5）などは、その仕様が最初に入ったバージョンです。バージョンで仕様が違うものは、それぞれのバージョンが別の項目として並びます。</p>
       </details>
       <details class="sec">
         <summary>ダイス・ボス・フィールドの一覧<small>登録内容から自動で作成</small></summary>
@@ -486,7 +496,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '4.3.7';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '5.0.1';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -532,6 +542,10 @@ defineVersion('6.6.5', Object.assign({}, VERSIONS['6.5.0'], { id: '6.6.5', label
 //   新ダイス：地震・雪玉。パッチ：死・地獄の即死（亡霊が出るもの）のSPが70%、コンボの基本攻撃力・フローの加速が強化（別IDの _672）
 defineVersion('6.7.2', Object.assign({}, VERSIONS['6.6.5'], { id: '6.7.2', label: 'v6.7.2（パーティーシーズン）', short: '6.7.2',
   season: ['growth', 'summon'], enrageFrom: 20 }));
+// v7.1.0（ユニバースシーズン）（5.0.0〜、ユーザー指定）：HP増加・デスウェーブ・中ボス・狂暴化・祝福・水晶などは 6.7.2 と同じ。シーズンダイスは陰陽・砂。
+//   新ダイス：充電。砂の特性「砂嵐」。台風の調整（typhoon_710）。コロシアムの調整（colosseum_710：7秒ごとに砂、20秒残る）
+defineVersion('7.1.0', Object.assign({}, VERSIONS['6.7.2'], { id: '7.1.0', label: 'v7.1.0（ユニバースシーズン）', short: '7.1.0',
+  season: ['yinyang', 'sand'] }));
 // シーズンダイス（family のID の配列）：バージョン選択ならそのバージョンの season、複合なら cfg.season（好きなだけ選べる）（3.8.0〜）
 function seasonOf(c) {
   const v = c && c.version;
@@ -1249,6 +1263,7 @@ class Game {
     const l = this.lv(type); return l >= 5 ? Infinity : PU_COST[l];
   }
   powerUp(type) {
+    if (!this.over && DICE[type] && DICE[type].onPuButton) return DICE[type].onPuButton(this, type); // PUボタンが別の働きをするダイス（充電：モードの切り替え。5.0.0〜）
     const c = this.puCost(type);
     if (this.over || this.sp < c) return false;
     if (!this.emit('beforePowerUp', { type, cost: c })) return false;
@@ -1617,11 +1632,24 @@ class Game {
     if (D.modifyAtk) atk = D.modifyAtk(this, s, atk);
     atk *= 1 + buf.atk; // 月の活性攻撃力（他バフ）
     if (buf.bmAtk > 1) atk *= buf.bmAtk; // ブラッドムーンの活性：攻撃力×ブラッドムーンの出目（4.3.1〜）
+    if (this.vars.dust) atk *= this.dustMul(d); // 相手の砂嵐の砂埃をかぶっているダイスは与えるダメージが減る（5.0.0〜）
     atk = this.filter('atk', atk, s);
     this.hit(tgt, atk, s.crate, d, D.critMul ? D.critMul(this, s) : 1);
     if (D.afterHit) D.afterHit(this, s, atk);
     if (buf.bmSplash && !s.bmChild) this.bloodSplash(s, atk); // ブラッドムーンの活性：隣のダイスの弾にスプラッシュ（4.3.0〜）
     this.tryInstaKill(s); // 地獄・死の即死（2.0.0〜）
+  }
+  // 砂埃（砂の特性「砂嵐」。5.0.0〜）：this.vars.dust＝[{x, y, r, until, down}]（盤面の座標）。ダイス d のマスにかかっている砂埃の数だけ与えるダメージが減る（合計99%まで）
+  dustOn(cell) {
+    const L = this.vars.dust; if (!L || !L.length || cell < 0) return 0;
+    const [cx, cy] = this.cellXY(cell); let s = 0;
+    for (const u of L) if (this.t < u.until && Math.hypot(u.x - cx, u.y - cy) <= u.r + 0.35) s += u.down; // 0.35＝ダイスの体の半分（少しでもかかれば対象）
+    return Math.min(0.99, s);
+  }
+  dustMul(d) {
+    const L = this.vars.dust; if (!L.length) return 1;
+    if (L[0].until <= this.t) { this.vars.dust = L.filter(u => u.until > this.t); if (!this.vars.dust.length) return 1; }
+    return 1 - this.dustOn(this.board.indexOf(d));
   }
   // ブラッドムーンのスプラッシュ（4.3.0〜、ユーザー指定）：当たった敵を中心に通路の位置で半径 r の敵へ、その弾の攻撃力×mul（会心は敵ごと）
   bloodSplash(s, atk) {
@@ -1806,6 +1834,7 @@ class Game {
       for (const E of DIE_EFFECT_LIST) if (E.observe) E.observe(this, d, o); // hacked・silenceLeft・bounty など
       if (D.activeCounts) o.active = this.isActive(d.type);
       if (!D.buff) o.buffs = JSON.parse(JSON.stringify(this.buffsAt(i))); // spd・crit・atk・scope と、登録された種類（hell など）
+      if (this.vars.dust && this.vars.dust.length) o.dust = this.dustOn(i); // 相手の砂埃による与えるダメージの減少（0〜0.99。5.0.0〜）
       if (!D.buff) o.timeSlow = this.oppSlow(d); // 相手の時間による攻撃間隔の増加（割合。月の速度バフと同じ位置で足す）（3.3.0〜）
       if (D.observe) o.state = JSON.parse(JSON.stringify(D.observe(this, d, i) || {}));
       return o;
@@ -1839,8 +1868,10 @@ class Game {
       over: this.over, life: this.life, sp: this.sp,
       summonCost: this.summonCost(), summonCount: this.summonCount, combo: this.combo,
       deck: c.deck.map(type => { const pc = this.puCost(type);
-        return { type: aiType(type), name: DICE[type].name, lv: this.lv(type), cls: this.cls(type), puMax: this.puMax(type),
-          puCost: isFinite(pc) ? pc : null, count: this.count(type) }; }),
+        const o = { type: aiType(type), name: DICE[type].name, lv: this.lv(type), cls: this.cls(type), puMax: this.puMax(type),
+          puCost: isFinite(pc) && !DICE[type].onPuButton ? pc : null, count: this.count(type) };
+        if (DICE[type].deckObserve) Object.assign(o, DICE[type].deckObserve(this, type)); // 充電：mode・gauge（5.0.0〜）
+        return o; }),
       board,
       enemies,
       // 先頭（最もゴールに近い敵）の要約。敵がいなければ null。eta はいまの速さのままゴールに着くまでの秒（止まっていれば null）
@@ -1919,6 +1950,7 @@ class Game {
       case 'powerUp': {
         const type = this.deckType(op.type); // AIは family のIDで送ってよい（3.3.0〜）
         if (!this.cfg.deck.includes(type)) return fail('notInDeck');
+        if (DICE[type].onPuButton) { if (!this.powerUp(type)) return fail('cancelled'); return { ok: true, op: name, type: aiType(type), lv: this.lv(type) }; } // 充電：モードの切り替え（5.0.0〜）
         if (this.lv(type) >= this.puMax(type)) return fail('maxLevel');
         if (!isFinite(this.puCost(type))) return fail('puLocked'); // 過熱の段階0のクールタイムなど
         if (this.sp < this.puCost(type)) return fail('noSP');
@@ -2432,11 +2464,23 @@ defineField('journal', { label: '五番目の航海日記', short: '航海日記
 defineField('plasma', { label: 'プラズマシールド', short: 'プラズマ',
   desc: 'ボススキルと相手の妨害スキルを確率で無効（10%＋0.5%×Lv）。',
   blockSkill(g) { return g.rng() < 0.10 + 0.005 * g.cfg.fieldLv; } });
-defineField('colosseum', { label: '最期のコロシアム', short: 'コロシアム',
+defineField('colosseum', { label: '最期のコロシアム', short: 'コロシアム', until: '7.1.0', // 7.1.0 からは colosseum_710（5.0.0〜）
   desc: '通路のランダムな位置に砂（中の敵を 20%＋1.5%×Lv 減速）。',
   init(g) { g.vars.sand = { pos: g.rng() * TRACK_LEN, r: 0.7, slow: 0.20 + 0.015 * g.cfg.fieldLv }; }, // 砂（通路の設置物）
   speedMult(g, e, m) { const s = g.vars.sand; return (s && Math.abs(e.pos - s.pos) <= s.r) ? m * (1 - s.slow) : m; },
   observe(g) { const s = g.vars.sand; return { sand: s ? { pos: s.pos, r: s.r, slow: s.slow } : null }; } });
+// コロシアム 7.1.0（5.0.0〜、ユーザー指定）：7秒ごとに通路のランダムな位置に砂を置く。置いた砂は20秒残る（同時に最大3つ）。減速の大きさ・砂の大きさは同じ。
+//   砂が重なっていても減速は1つ分（△）
+defineField('colosseum_710', { family: 'colosseum', label: '最期のコロシアム', short: 'コロシアム', since: '7.1.0', every: 7, life: 20,
+  desc: '7秒ごとに通路のランダムな位置に砂（中の敵を 20%＋1.5%×Lv 減速）。砂は20秒残る（7.1.0〜）。',
+  init(g) { g.vars.sands = []; g.vars.sandNext = 0; },
+  tick(g) {
+    const L = g.vars.sands;
+    if (L.length && L[0].until <= g.t) L.shift();
+    if (g.t >= g.vars.sandNext) { g.vars.sandNext += this.every; L.push({ pos: g.rng() * TRACK_LEN, r: 0.7, slow: 0.20 + 0.015 * g.cfg.fieldLv, until: g.t + this.life }); }
+  },
+  speedMult(g, e, m) { for (const s of g.vars.sands) if (g.t < s.until && Math.abs(e.pos - s.pos) <= s.r) return m * (1 - s.slow); return m; },
+  observe(g) { const L = g.vars.sands.filter(s => s.until > g.t).map(s => ({ pos: s.pos, r: s.r, slow: s.slow, left: s.until - g.t })); return { sand: L[0] || null, sands: L, nextIn: Math.max(0, g.vars.sandNext - g.t) }; } });
 defineField('crystal', { label: '霜風の水晶渓谷', short: '水晶', until: '6.6.5', // 6.6.5 からは crystal_665（3.8.0〜）
   desc: '20秒ごとに通路の敵すべてを凍結（2＋0.1×Lv 秒）。',
   init(g) { g.vars.crystalNext = 20; },
@@ -2717,7 +2761,7 @@ defineDice('blizzard', { name: '吹雪', rar: 'L', color: '#9fd3f0', atk: [30, 5
     }
   } });
 
-defineDice('typhoon', { name: '台風', rar: 'L', color: '#6f8fb8', atk: [20, 3, 30], spd: [0.6, 0], st1: [4, 0.5, 0], st2: [1, 0.5, 0], charge: 6,
+defineDice('typhoon', { name: '台風', rar: 'L', until: '7.1.0', color: '#6f8fb8', atk: [20, 3, 30], spd: [0.6, 0], st1: [4, 0.5, 0], st2: [1, 0.5, 0], charge: 6,
   desc: '前方。充電6秒 → 連射（間隔0.1秒）→ 会心確定、を繰り返す。',
   init(g, d) { d.typh = 0; d.typhPhase = 0; },
   observe(g, d) {
@@ -2731,6 +2775,21 @@ defineDice('typhoon', { name: '台風', rar: 'L', color: '#6f8fb8', atk: [20, 3,
   },
   baseInterval(g, d) { return d.typhPhase === 1 ? 0.1 : g.defaultBaseInterval('typhoon'); },
   onFire(g, i, d, shot) { if (d.typhPhase === 2) shot.crate = 1; } });
+// 台風（7.1.0。5.0.0〜、スクリーンショット：クラス10で 攻撃力20・攻撃速度0.546秒・1段階6.1秒・2段階3.1秒、PUで −0.018秒・+0.7秒・+0.7秒）
+//   攻撃力20（PU+30。クラスでは増えない）、攻撃速度 0.6秒 −0.018×(クラス−7)、1段階 4秒・2段階 1秒（どちらもクラス+0.7秒）。PUで速度・持続は変わらない（5.0.1 で訂正）。
+//   ほかの動き（6秒→連射0.1秒→会心確定）は同じ
+defineDice('typhoon_710', Object.assign({}, DICE.typhoon, { id: 'typhoon_710', since: '7.1.0', until: undefined, family: 'typhoon',
+  atk: [20, 0, 30], spd: [0.6, -0.018], spdPU: 0, st1: [4, 0.7, 0], st2: [1, 0.7, 0], // 5.0.1：緑＝クラスの増分（速度・持続）、水色＝PUの増分（攻撃力+30）に直した
+  observe(g, d) {
+    const lim = d.typhPhase === 0 ? this.charge : d.typhPhase === 1 ? g.stat('typhoon_710', 'st1') : g.stat('typhoon_710', 'st2');
+    return { phase: d.typhPhase, phaseLeft: lim - d.typh };
+  },
+  tick(g, i, d, dt) {
+    d.typh += dt;
+    const lim = d.typhPhase === 0 ? this.charge : d.typhPhase === 1 ? g.stat('typhoon_710', 'st1') : g.stat('typhoon_710', 'st2');
+    if (d.typh >= lim) { d.typh = 0; d.typhPhase = (d.typhPhase + 1) % 3; }
+  },
+  baseInterval(g, d) { return d.typhPhase === 1 ? 0.1 : Math.max(0.05, g.defaultBaseInterval('typhoon_710') + this.spdPU * (g.lv('typhoon_710') - 1)); } }));
 
 defineDice('growth', { name: '成長', rar: 'L', color: '#7a5fd6', atk: [10, 5, 10], spd: [2.0, 0], grow: [15, -1, 0],
   desc: '前方。一定時間で、出目+1のランダムなダイスに変わる（出目7で止まる。封印中は進まない）。',
@@ -3154,6 +3213,90 @@ defineDice('sirius', { name: 'シリウス', rar: 'L', ex: true, classMin: 10, c
     const amt = s.tgt.hp * p; g.damage(s.tgt, amt, s.d); g.emit('pctHit', { enemy: s.tgt, amount: amt, die: s.d, lane: 1, src: 'sirius' });
   },
   observe(g, d) { return { count: d.sirM, atkUp: 0.5 * Math.floor(Math.max(0, d.sirM) / 2) }; } });
+
+// =====================================================================
+// 砂（伝説。全バージョン。5.0.0〜、スクリーンショット・ユーザー指定）
+//   クラス10で 攻撃力80（クラス+10）・攻撃速度1秒・ランダム・砂の持続11秒（クラス+1秒）。PUでは増えない（5.0.1 で訂正）
+//   一定時間ごと（△ 10秒÷出目）に、通路のランダムな位置に［砂］（△ 半径0.7＝コロシアムと同じ、△ 減速30%）を置く。
+//   砂の減速は設置物として掛け算（砂が重なると重なった数だけ掛ける）。ほかの減速と合わせて、速度は元の20%より下がらない（最大80%の減速）。
+//   特性「砂嵐」（7.1.0〜）：砂を置くたびに、相手の盤面のランダムな位置に［砂埃］を出目の数だけ撒く（半径0.375＝太陽の最大スプラッシュの半分、5秒）。
+//     砂埃をかぶった相手のダイスは、与えるダメージが1つにつき 25%（PU+5%。PU5で45%）減る（重なると合計99%まで）。
+//     △ 持続型の妨害として扱う（プラズマシールドで防げない・光のプリズムで増えない・バブルで防げない）
+// =====================================================================
+function sandState(g) { return g.vars.sandDie || (g.vars.sandDie = { list: [] }); }
+defineDice('sand', { name: '砂', rar: 'L', color: '#c9a55a', atk: [50, 10, 0], spd: [1.0, 0], dur: [8, 1, 0], down: [0.25, 0, 0.05], // 5.0.1：攻撃力・持続はクラスで、ダメージ減少はPUで増える（画像の緑＝クラス、水色＝PU）
+  random: true, sandR: 0.7, sandSlow: 0.30, sandEvery: 10, slowCap: 0.8, dustR: 0.375, dustLife: 5,
+  desc: 'ランダム。10秒÷出目ごとに通路のランダムな位置に砂（中の敵を30%減速、重なると掛け算。全体で最大80%）。特性「砂嵐」：砂を置くたびに相手の盤面へ砂埃を出目の数（かぶったダイスの与えるダメージ−25%〔PU+5%〕、5秒）。',
+  traits: { storm: { id: 'storm', name: '砂嵐', since: '7.1.0', desc: '砂を置くたびに、相手の盤面のランダムな位置に砂埃を出目の数だけ撒く（5秒。かぶったダイスの与えるダメージが減る）。' } },
+  init(g, d) { d.sandT = 0; },
+  observe(g, d) { return { nextSandIn: Math.max(0, this.sandEvery / d.pips - d.sandT) }; },
+  tick(g, i, d, dt) {
+    d.sandT += dt;
+    if (d.sandT < this.sandEvery / d.pips) return;
+    d.sandT = 0;
+    const S = sandState(g), t = d.type;
+    S.list.push({ pos: g.rng() * TRACK_LEN, r: this.sandR, slow: this.sandSlow, until: g.t + g.stat(t, 'dur') });
+    if (S.list.length > 60) S.list.shift();
+    const o = g.opp;
+    if (o && !o.over && g.trait(t)) { // 砂嵐：相手の盤面に砂埃
+      const L = o.vars.dust || (o.vars.dust = []), down = g.stat(t, 'down');
+      for (let k = 0; k < d.pips; k++) L.push({ x: COL_X[0] - 0.4 + g.rng() * (COL_X[4] - COL_X[0] + 0.8), y: ROW_Y[2] - 0.4 + g.rng() * (ROW_Y[0] - ROW_Y[2] + 0.8), r: this.dustR, until: g.t + this.dustLife, down });
+      L.sort((a, b) => a.until - b.until);
+      g.emit('dust', { n: d.pips });
+    }
+  },
+  deckTick(g) { const S = g.vars.sandDie; if (S && S.list.length && S.list.some(q => q.until <= g.t)) S.list = S.list.filter(q => q.until > g.t); },
+  speedMult(g, e, m) {
+    const S = g.vars.sandDie; if (!S || !S.list.length) return m;
+    let k = m;
+    for (const q of S.list) if (g.t < q.until && Math.abs(e.pos - q.pos) <= q.r + e.d / 2) k *= 1 - q.slow;
+    return k === m ? m : Math.max(Math.min(m, 1 - this.slowCap), k); // 砂をふくめた減速は最大80%（もともとそれより遅ければそのまま）
+  },
+  deckObserve(g) { const S = g.vars.sandDie; return { sands: S ? S.list.filter(q => q.until > g.t).map(q => ({ pos: q.pos, r: q.r, slow: q.slow, left: q.until - g.t })) : [] }; } });
+
+// =====================================================================
+// 充電（伝説。7.1.0〜。5.0.0〜、ユーザー指定の式・動画）
+//   PUボタンは［充電］⇔［放出］の切り替え（SPは使わない。ふつうのPUはない）。レベル L は充電でだけ上がる（デッキで共通。上限なし）。
+//   ［放出］：前方。攻撃力 A(L) = 300 + 50×(クラス−7) + 5×L×(L−1)、攻撃間隔 1.3秒÷出目。
+//   ［充電］：攻撃しない。0.2秒ごとに、盤面の充電のダイス1個ずつが先頭の敵から吸収してゲージをためる（敵にダメージはない）。
+//     充電速度 s = (120 + 50×(クラス−7) + 5×(L−1))÷100、対象倍率 m = 雑魚1／中ボス2／ボス4、出目倍率 f = 1,2,3,4,5.40,8.33,11.84、
+//     1回（0.2秒）のゲージ = 0.2×f×m×s、SP = 0.2×3.45×出目×m×s。ゲージが G(L) = 1.584×L + 6.46 に届くとレベル+1（余りは持ち越さない）。
+//     △ SPが足りないダイスは、SPを使わずに速度0.3倍（実測は約1/4〜1/3）。△ m：ボス・転移ボス・バジリスクの手下は4、それ以外のボス扱い（中ボス・スライムなど）は2。
+//     △ 複数個はそれぞれが同じゲージにためる。△ 試合の始めは［放出］。封印・沈黙中のダイスは充電しない
+// =====================================================================
+const CHARGE_F = [0, 1, 2, 3, 4, 5.40, 8.33, 11.84];
+function chargeState(g) { return g.vars.charge || (g.vars.charge = { mode: 'fire', gauge: 0, next: 0 }); }
+defineDice('charge', { name: '充電', rar: 'L', since: '7.1.0', color: '#3fbf4a', atk: [300, 50, 0], spd: [1.3, 0], puMax: 9999, tickSec: 0.2, noSpMul: 0.3, spRate: 3.45,
+  desc: 'PUボタンで［充電］⇔［放出］。充電：先頭の敵から吸収してレベルを上げる（SPを使う。ボス4倍・中ボス2倍。出目が高いほど速い）。放出：前方に 攻撃力＋5×L×(L−1)。',
+  puCost() { return 0; },
+  gaugeMax(L) { return 1.584 * L + 6.46; },
+  speed(g, type) { return (120 + 50 * (g.cls(type) - 7) + 5 * (g.lv(type) - 1)) / 100; },
+  onPuButton(g, type) {
+    const C = chargeState(g); C.mode = C.mode === 'charge' ? 'fire' : 'charge';
+    if (C.mode === 'charge') C.next = g.t + this.tickSec;
+    g.L(`${g.tag}充電のダイス：${C.mode === 'charge' ? '充電' : '放出'}モード（Lv${g.lv(type)}）`);
+    g.emit('powerUp', { type, lv: g.lv(type), cost: 0, mode: C.mode });
+    return true;
+  },
+  puLabel(g, t) { const C = chargeState(g); return `x<br>${C.mode === 'charge' ? '充電' : '放出'} LV.${g.lv(t)}`; },
+  deckObserve(g, t) { const C = chargeState(g); return { mode: C.mode, gauge: C.gauge, gaugeMax: this.gaugeMax(g.lv(t)) }; },
+  observe(g, d) { const C = chargeState(g); return { mode: C.mode }; },
+  baseAtk(g) { const L = g.lv('charge'); return g.stat('charge', 'atk') + 5 * L * (L - 1); },
+  onFire(g) { if (chargeState(g).mode === 'charge') return false; },
+  deckTick(g) {
+    const C = chargeState(g); if (C.mode !== 'charge') return;
+    while (C.next <= g.t + 1e-9) {
+      C.next += this.tickSec;
+      const tgt = g.first(); if (!tgt) continue;
+      const m = !g.isBossLike(tgt) ? 1 : (['boss', 'tboss', 'mini'].includes(tgt.kind) ? 4 : 2), s = this.speed(g, 'charge');
+      let any = false;
+      for (let i = 0; i < 15; i++) { const d = g.board[i]; if (!d || d.type !== 'charge' || d.sealed) continue;
+        const cost = this.tickSec * this.spRate * d.pips * m * s, gain = this.tickSec * CHARGE_F[d.pips] * m * s;
+        if (g.sp >= cost) { g.sp -= cost; C.gauge += gain; } else C.gauge += gain * this.noSpMul;
+        g.addFx('chargeBeam', { cell: i, pos: tgt.pos }, 0.22); any = true; }
+      if (any && C.gauge >= this.gaugeMax(g.lv('charge'))) { C.gauge = 0; g.pu.charge = g.lv('charge') + 1; g.emit('chargeLevel', { lv: g.pu.charge }); }
+    }
+  } });
 
 defineDice('sacrifice', { name: '生贄', rar: 'R', color: '#21aeb0', atk: [10, 10, 10], spd: [1.0, 0],
   desc: '前方。合成・消滅すると 80×出目 のSPが入る。',
@@ -4273,6 +4416,10 @@ V('field', 'colosseum', { theme: { bg: ['#f2e1c2', '#d8b582'], track: '#fbf0dc',
   deco({ ctx, W, H, S }) { ctx.fillStyle = '#b8322c'; ctx.fillRect(0, H - 0.12 * S, W, 0.12 * S); ctx.fillStyle = '#e0b24a'; ctx.fillRect(0, H - 0.15 * S, W, 0.03 * S); },
   // 砂（中の敵が遅くなる）
   under({ ctx, X, Y, S }, g) { const s = g.vars.sand; if (!s) return; const [x, y] = g.posXY(s.pos); ctx.fillStyle = 'rgba(214,180,110,.35)'; ctx.beginPath(); ctx.arc(X(x), Y(y), s.r * S, 0, 7); ctx.fill(); } });
+// コロシアム 7.1.0（5.0.0〜）：見た目は同じ。砂は複数（消える前の1秒で薄くなる）
+V('field', 'colosseum_710', Object.assign({}, RD.FIELDS.colosseum.view, {
+  under({ ctx, X, Y, S }, g) { for (const s of g.vars.sands || []) { if (g.t >= s.until) continue; const [x, y] = g.posXY(s.pos), a = Math.min(1, s.until - g.t);
+    ctx.fillStyle = `rgba(214,180,110,${0.35 * a})`; ctx.beginPath(); ctx.arc(X(x), Y(y), s.r * S, 0, 7); ctx.fill(); } } }));
 V('field', 'paradise', { theme: { bg: ['#fffbf2', '#f2e3c6'], track: '#fffdf8', panel: '#fbf5e8', cell: '#ffffff', stroke: '#e3cfa2', label: '#9a7a3a', panelBorder: '#d9a83a' },
   deco({ ctx, W, H, S }) { ctx.fillStyle = '#b8322c'; ctx.fillRect(0, H - 0.1 * S, W, 0.1 * S); ctx.fillStyle = '#e6b84a'; ctx.fillRect(0, 0, W, 0.06 * S); ctx.fillRect(0, H - 0.13 * S, W, 0.03 * S); },
   // 会心率が上がるマス：金色に光る。空いていれば星のきらめき
@@ -4575,6 +4722,31 @@ V('effect', 'ixHack', { z: 2, draw({ ctx, S, roundRect }, g, d, b) { if (!d.ixHa
   ctx.fillStyle = '#ff3ca0'; ctx.font = `bold ${0.14 * S}px sans-serif`; ctx.textAlign = 'left'; ctx.fillText('ix', b.x + 0.05 * S, b.y + b.fh - 0.06 * S); ctx.textAlign = 'center'; } });
 V('dice', 'typhoon', { glyph(p, x, y, r, c, c2, bg) { const ctx = p.ctx; ctx.strokeStyle=c; ctx.lineWidth=r*0.14; ctx.lineCap='round'; ctx.beginPath(); for(let t=0;t<=1;t+=0.02){ const a=t*Math.PI*3.2, rr=r*0.85*t; ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.stroke(); },
   bar: (g, d) => d.typhPhase === 0 ? 0 : 1 });
+V('dice', 'typhoon_710', RD.DICE.typhoon.view); // 台風 7.1.0 は同じ見た目（5.0.0〜）
+// 砂（5.0.0〜。オリジナルの記号：砂の山と流れる砂粒）。通路の砂は under で描く
+V('dice', 'sand', { c2: '#f3e2b4',
+  glyph(p, x, y, r, c, c2) { const ctx = p.ctx; ctx.save();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x - r * 0.9, y + r * 0.6); ctx.quadraticCurveTo(x - r * 0.3, y - r * 0.5, x + r * 0.05, y - r * 0.15); ctx.quadraticCurveTo(x + r * 0.45, y - r * 0.75, x + r * 0.9, y + r * 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = c2; for (const [dx, dy, q] of [[-0.45, -0.55, 0.09], [0.1, -0.75, 0.07], [0.6, -0.45, 0.08], [-0.1, -0.4, 0.06]]) { ctx.beginPath(); ctx.arc(x + dx * r, y + dy * r, q * r, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = c2; ctx.lineWidth = Math.max(1, r * 0.08); ctx.beginPath(); ctx.moveTo(x - r * 0.5, y + r * 0.3); ctx.quadraticCurveTo(x, y + r * 0.05, x + r * 0.5, y + r * 0.3); ctx.stroke();
+    ctx.restore(); },
+  under({ ctx, X, Y, S }, g) { const Q = g.vars.sandDie; if (!Q) return;
+    for (const q of Q.list) { if (g.t >= q.until) continue; const [x, y] = g.posXY(q.pos), a = Math.min(1, (q.until - g.t) / 1.0);
+      ctx.fillStyle = `rgba(201,165,90,${0.38 * a})`; ctx.beginPath(); ctx.arc(X(x), Y(y), q.r * S, 0, 7); ctx.fill();
+      ctx.strokeStyle = `rgba(150,115,50,${0.5 * a})`; ctx.lineWidth = Math.max(1, 0.02 * S); ctx.stroke(); } } });
+// 充電（5.0.0〜。オリジナルの記号：稲妻）。充電モードは緑、放出モードは赤
+V('dice', 'charge', { c2: '#eaffea',
+  palette(g, d) { const C = g.vars.charge; return C && C.mode === 'charge' ? null : { c: '#e0483c', c2: '#ffe3de' }; },
+  glyph(p, x, y, r, c, c2) { const ctx = p.ctx; ctx.save(); ctx.fillStyle = c; ctx.beginPath();
+    for (const [dx, dy] of [[0.25, -0.95], [-0.55, 0.1], [-0.08, 0.1], [-0.3, 0.95], [0.6, -0.2], [0.1, -0.2]]) ctx.lineTo(x + dx * r, y + dy * r);
+    ctx.closePath(); ctx.fill(); ctx.strokeStyle = c2; ctx.lineWidth = Math.max(1, r * 0.07); ctx.stroke(); ctx.restore(); },
+  bar: (g, d) => { const C = g.vars.charge; return C && C.mode === 'charge' ? Math.min(1, C.gauge / RD.DICE.charge.gaugeMax(g.lv('charge'))) : null; } });
+// 充電の吸収（敵 → ダイスへの緑の線。5.0.0〜）
+V('fx', 'chargeBeam', { top: true, latestBy: 'cell', draw({ ctx, X, Y, S }, g, f, a) {
+  const [cx, cy] = g.cellXY(f.cell), [ex, ey] = g.posXY(f.pos);
+  ctx.save(); ctx.strokeStyle = `rgba(90,235,110,${0.85 * a})`; ctx.lineWidth = Math.max(1.5, 0.05 * S); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(X(ex), Y(ey)); ctx.lineTo(X(cx), Y(cy)); ctx.stroke();
+  ctx.fillStyle = `rgba(140,255,150,${0.8 * a})`; ctx.beginPath(); ctx.arc(X(ex), Y(ey), 0.16 * S, 0, 7); ctx.fill(); ctx.restore(); } });
 V('dice', 'growth', { c2: '#b6a6f0',
   glyph(p, x, y, r, c, c2) { sprout(p.ctx, x, y, r, c, c2); },
   bar: (g, d) => d.pips < 7 ? d.growT / g.stat('growth', 'grow') : null });
@@ -4783,7 +4955,9 @@ const ALL = () => Object.keys(DICE);
 function buildDeckRows(boxId, prefix, deck, note, prev){
   const box = $(boxId); box.innerHTML = '<div class="deckhead"><span></span><span>ダイス</span><span>特性</span><span>クラス</span><span>開始PU</span></div>';
   const tmp = { cls: {} }, v = curVer();
-  const avail = ALL().filter(t=>RD.availableIn(DICE[t],v));
+  const avail0 = ALL().filter(t=>RD.availableIn(DICE[t],v));
+  // 同じダイスの別バージョン（コンボ 6.0.5／6.7.2 など）は隣に並べる（5.0.0〜。複合で見つけやすく）
+  const fams = [...new Set(avail0.map(t=>RD.aiType(t)))], avail = fams.flatMap(f=>avail0.filter(t=>RD.aiType(t)===f));
   const used = [];
   for (let k=0;k<5;k++){
     const row = document.createElement('div'); row.className='deckrow';
@@ -5150,6 +5324,10 @@ function drawBoard(g, main, agent){
     else if(main && d && sel>=0 && g.canAct(sel,i)){ctx.strokeStyle='rgba(123,216,143,.9)';ctx.lineWidth=2;roundRect(x0+1,y0+1,s-2,s-2,0.1*S);ctx.stroke();}
   }
   if(FV.top) FV.top(P,g); // ダイスの上に描くフィールドの演出
+  if(g.vars.dust && g.vars.dust.length){ // 相手の砂嵐の砂埃（かぶったダイスは与えるダメージが減る。5.0.0〜）
+    for(const u of g.vars.dust){ if(g.t>=u.until) continue; const a=Math.min(1,(u.until-g.t)/0.6), R0=(u.r+0.12)*S, gx=X(u.x), gy=Y(u.y);
+      const gr=ctx.createRadialGradient(gx,gy,0,gx,gy,R0); gr.addColorStop(0,`rgba(190,150,80,${0.6*a})`); gr.addColorStop(0.7,`rgba(200,165,100,${0.4*a})`); gr.addColorStop(1,'rgba(200,165,100,0)');
+      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(gx,gy,R0,0,7); ctx.fill(); } }
   drawActFx(g); // 月・太陽が活性になった瞬間の模様（3.10.4〜）
   // ダイスごとの重ね描き（view.overlay：原子の回転粒子など）
   for(let i=0;i<15;i++){const d=g.board[i]; if(!d) continue; const V=DICE[d.type].view; if(!V||!V.overlay) continue;
@@ -5766,6 +5944,16 @@ document.addEventListener('touchmove',e=>{ if(e.touches.length>1) e.preventDefau
     const b=e.target.closest('button'); if(b&&!b.disabled) b.click();
   },{passive:false});
   document.addEventListener('dblclick',e=>{ if(e.target.closest&&e.target.closest('.stage')) e.preventDefault(); },{passive:false}); }
+// ダブルタップの拡大を確実に止める（4.3.8〜。ウェブアプリ・対戦版と同じ対策）：0.35秒以内の2回目のタップは、ブラウザの既定の動き（拡大・スクロールの移動）を止める。
+//   ボタンの連打が効かなくならないように、止めたときはボタンのクリックをこちらで起こす。入力欄・選択欄・コード欄は止めない
+{ let lastEnd=0;
+  document.addEventListener('touchend',e=>{
+    const now=performance.now(), t=e.target, quick=now-lastEnd<350; lastEnd=now;
+    if(!quick || e.touches.length || (t.closest && t.closest('input,textarea,select,[contenteditable],a,label,summary'))) return;
+    e.preventDefault();
+    const b=t.closest && t.closest('button'); if(b && !b.disabled) b.click();
+  },{passive:false});
+  document.addEventListener('dblclick',e=>{ if(!(e.target.closest && e.target.closest('input,textarea,[contenteditable]'))) e.preventDefault(); },{passive:false}); }
 $('bPause').onclick=()=>{paused=!paused;$('bPause').textContent=paused?'▶':'⏸';};
 $('bAutoS').onclick=()=>{autoS=!autoS;$('bAutoS').classList.toggle('on',autoS);};
 $('bAutoM').onclick=()=>{autoM=!autoM;$('bAutoM').classList.toggle('on',autoM);};
@@ -6034,7 +6222,8 @@ function curPool(){ const k=$('plSel').value; return allPools().find(p=>p.key===
 function fillPoolSel(want){
   const s=$('plSel'), list=allPools(), has=k=>!!k&&list.some(p=>p.key===k);
   let saved=null; try{ saved=localStorage.getItem(POOL_SEL); }catch(e){}
-  const pick = has(want) ? want : has(saved) ? saved : s.value; // 指定 → 前に選んでいたプール → いまの選択
+  const DEF='f:season1_rankmatch'; // Web版：初めて開いたときはシーズン1ランクマ
+  const pick = has(want) ? want : has(saved) ? saved : has(DEF) ? DEF : s.value; // 指定 → 前に選んでいたプール → シーズン1ランクマ → いまの選択
   s.innerHTML='';
   list.forEach(p=>{ const o=document.createElement('option'); o.value=p.key; o.textContent=`${p.pool.name}（${p.src}・${p.pool.entries.length}件）`; s.appendChild(o); });
   if(has(pick)) s.value=pick;

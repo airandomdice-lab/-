@@ -2,7 +2,7 @@
 
 ランダムダイス 練習・対戦シミュレータ（オフライン版）。
 
-- `index.html` … シミュレータ本体（4.3.7・Web版）
+- `index.html` … シミュレータ本体（5.0.1・Web版）
 - `ai/` … AIファイル（`ai/index.js` に並べたファイルを読み込みます）
 - `Battlepool/` … 対戦プール（`Battlepool/index.js` に並べたファイルを読み込みます）
 
