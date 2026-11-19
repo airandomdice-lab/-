@@ -6568,8 +6568,8 @@ function buildVersionUI(){
   const h=$('cHp'); h.innerHTML='';
   RD.VERSION_ORDER.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=`${RD.VERSIONS[v].label}の式`;h.appendChild(o);});
   let sv=null, sh=null; try{ sv=localStorage.getItem('rd_ver'); sh=localStorage.getItem('rd_hpSpec'); }catch(e){}
-  s.value = sv && [...s.options].some(o=>o.value===sv) ? sv : cfg.version;
-  h.value = sh && RD.VERSIONS[sh] ? sh : cfg.hpSpec;
+  s.value = sv && [...s.options].some(o=>o.value===sv) ? sv : RD.MIX; // Web版：初めて開いたときは複合
+  h.value = sh && RD.VERSIONS[sh] ? sh : RD.VERSIONS['6.0.5'] ? '6.0.5' : cfg.hpSpec; // Web版：初めて開いたときはHP 6.0.5 の式
 }
 function curVer(){ return $('cVer').value; }
 // シーズンダイス（3.8.0〜）：複合では好きなだけ選ぶ（family のID）。バージョン選択では表示だけ
