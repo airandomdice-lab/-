@@ -970,7 +970,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '6.0.0ζ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '6.0.0η';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -5417,6 +5417,17 @@ V('fx', 'bmSplash', { latestBy: 'die', draw({ ctx, X, Y, S }, g, f, a) {
 const BLESS_COL = ['#ffffff', '#5ee06a', '#c58bff', '#ff9a1a']; // コモン白・レア緑・エピック紫・伝説オレンジ（6.0.0ζ〜）
 function star4(ctx, x, y, R, r) { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, q = k % 2 ? r : R; ctx[k ? 'lineTo' : 'moveTo'](x + q * Math.cos(a), y + q * Math.sin(a)); } ctx.closePath(); }
 V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422', // 出目の点の中は金色（6.0.0δ〜。ふちは白のまま）
+  // 星（出目7）：次のゲージ+1までの時間（6.0.0η〜）。ダイスのまわりを青い輪が時計回りにたまり、下に残り秒数
+  overlay({ ctx, X, Y, S, g, d, cx, cy }) {
+    if (d.pips !== 7) return;
+    const E = RD.DICE.blessdice.starEvery, k = Math.max(0, Math.min(1, (d.blessT || 0) / E)), x = X(cx), y = Y(cy), R = 0.4 * S;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(20,24,34,.35)'; ctx.lineWidth = Math.max(2, 0.05 * S); ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.stroke();
+    if (k > 0) { ctx.strokeStyle = k > 0.85 ? '#ffd23f' : '#58b8ff'; ctx.lineWidth = Math.max(2.5, 0.06 * S); ctx.beginPath(); ctx.arc(x, y, R, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
+    const tx = Math.max(0, Math.ceil(E - (d.blessT || 0))) + '秒', fy = y + R + 0.02 * S;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${0.15 * S}px sans-serif`; ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2.5, 0.045 * S); ctx.strokeStyle = 'rgba(10,12,18,.9)'; ctx.strokeText(tx, x, fy); ctx.fillStyle = '#ffffff'; ctx.fillText(tx, x, fy);
+    ctx.restore(); },
   glyph(p, x, y, r, c) { const ctx = p.ctx; ctx.fillStyle = c; star4(ctx, x, y, r * 1.05, r * 0.3); ctx.fill();
     for (const [dx, dy] of [[-0.75, -0.7], [0.75, -0.7], [-0.75, 0.7], [0.75, 0.7]]) { star4(ctx, x + dx * r, y + dy * r, r * 0.28, r * 0.09); ctx.fill(); } },
   deco({ ctx, S }, g, d, b, C) { // 月桂樹の葉（面の下の左右）
