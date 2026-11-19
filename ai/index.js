@@ -27,15 +27,13 @@ RD_AI_FILES = [
 'moon_combo_paradise_ai1.0.0.js',
 'moon_combo_paradise_toa_ai1.4.3.js',
 'moon_combo_summon_ai1.0.0.js',
-'yinyang_royal_ranker_ai1.25.3.js',
+'yinyang_royal_ranker_ai1.27.0.js',
 'bloodsirius_royal_ai1.1.2.js',
 'yinyang_metastasis_ai1.1.2.js',
 'moonsun_switch_ranker_ai1.2.1.js',
 'moonsun_tele_incoman_ai1.7.0.js',
 'moon_combo_royal_ai1.1.0.js',
-'moonsun_royal_ranker_ai0.3.18.js',
-'moonsun_teleport_ai.js',
-'moonsun_switch_ai.js',
+'moonsun_royal_ranker_ai0.3.18.js'
 
 
 ];

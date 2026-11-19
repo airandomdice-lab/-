@@ -1,4 +1,4 @@
-// ランカー陰ロイAI 1.25.3（対面ごとに戦術モジュールを組み合わせる）
+// ランカー陰ロイAI 1.27.0（対面ごとに戦術モジュールを組み合わせる）
 //
 // ■ 対面とモジュール
 //   試合の最初に、相手のデッキとスキンから対面を決め、その対面のモジュールを上から順に試す（手が出たらそれを使う。どれも出なければ召喚）
@@ -22,6 +22,11 @@
 //   ライン：クリマスの縦横のマス（合計6マス。クリマスは含まない）。ライン外：クリマスとライン以外の8マス
 //
 // 変更：1.1.0　暗殺対面（相手のデッキに暗殺がある）で、スイッチによる暗殺避けを追加
+// 変更：1.27.0　月太陽対面：試合の最初に1/2で「新しい選択」（msNewPlan）。極の調和目指し・出目上げなどは同じで、ロイヤル攻撃の条件だけ変える：
+//   W5・W8・W10（msNewWaves）の残り45秒から、相手の太陽が活性していればロイヤル攻撃。
+//   残り10秒で相手の先頭が中央（6）を越えていなければ、そのウェーブのロイヤル攻撃は終了。ほかのウェーブ・時間はロイヤル攻撃をしない
+//   W5・W8・W10 でロイヤル攻撃をしないときは、いつもロイヤルそろえ（打たない）を動かす
+// 変更：1.26.0　ライン建て直しの2番目に追加：陰陽をコピーできるライン外のジョーカーを、ラインのスイッチで引き込む（次の手で陰陽をコピー）
 // 変更：1.25.3　上の普通のロイヤルそろえでも打つ手がないときだけ、残すスイッチの守りを外してもう一度ロイヤルそろえ
 // 変更：1.25.2　出目上げ待ちで、打つ手もロイヤルもない（打てない）ときは、残すスイッチは守ったまま普通のロイヤルそろえ（養分を与える手もあり）に戻す
 // 変更：1.25.1　スイッチ絞り：W3まで（クリマスで切る）に、クリマスの陰陽と同じ出目のスイッチがラインの外になければ、ラインの陰陽と同じ出目のスイッチでラインの陰陽をずらして切る
@@ -270,6 +275,8 @@ const PARTS = (() => {
   // ライン建て直し：ライン（クリマスの縦横6マス。クリマスは含めない）を陰陽でそろえる
   //   ラインの陰陽とクリマスには触らない。上から順に、最初に打てる手を返す
   //   1. スイッチで陰陽をラインに置けるなら置く
+  //   1.5（1.26.0）陰陽をコピーできる（同じ出目の陰陽が盤面にある）ライン外のジョーカーを、ラインのスイッチで引き込む（次の手で2・3が陰陽をコピー）
+  //       出目3以上のジョーカーは、ライン外に同じ出目の養分がないときだけ（あると3で養分をコピーしてしまうため）
   //   2. ラインの出目2以下のジョーカーは陰陽をコピー
   //   3. ラインの出目3以上のジョーカー：ライン外に同じ出目の養分があればコピー（次の手で8がその養分へ逃がす）、なければ陰陽をコピー
   //   4. ラインの出目n（2以上）のジョーカーで陰陽をコピーできないとき：ライン外に出目n−1の陰陽があれば、出目nの陰陽を作る（makeDie）
@@ -297,6 +304,13 @@ const PARTS = (() => {
       for (let s2 = 0; s2 < 15; s2++) if (offc(s2) && H.is(s2, 'switch') && (x = find(s2, t, 'swap'))) return x;
     const allY = p => [...Array(15).keys()].filter(i => H.is(i, 'yinyang') && b[i].pips === p);
     const lj = lineNot.filter(i => H.is(i, 'joker'));
+    // 1.5
+    for (const t of lineNot) if (H.is(t, 'switch')) {
+      const p = b[t].pips;
+      if (!allY(p).length) continue;
+      if (p >= 3 && [...Array(15).keys()].some(i => offc(i) && H.is(i, 'nutrient') && b[i].pips === p)) continue;
+      for (const q of [...Array(15).keys()].filter(i => offc(i) && H.is(i, 'joker') && b[i].pips === p)) if ((x = find(t, q, 'swap'))) return x;
+    }
     // 2
     for (const j of lj.filter(i => b[i].pips <= 2)) for (const y of allY(b[j].pips)) if ((x = find(j, y, 'copy'))) return x;
     // 3
@@ -559,6 +573,10 @@ RD.defineAgent('yinyang_royal_ranker', {
     msRefMoon: 6, msRefSun: 6,     // 月太陽対面（W6〜）：相手の月太陽の火力がこの出目の月と太陽の組以上なら打つ
     rmsSkipSec: 10,      // 月太陽ロイヤル対面：W4以降、ウェーブ開始からこの秒数は攻撃しない
     rmsLimitPos: 9.5,    // 月太陽ロイヤル対面：相手の先頭がこの位置（2つ目の角の先1マス）を越えていない間は攻撃
+    msNewPlan: 0.5,      // 月太陽対面：新しい選択をする確率（試合の最初に1回決める。1＝いつも・0＝しない）
+    msNewWaves: [5, 8, 10], // 新しい選択：ロイヤル攻撃をするウェーブ
+    msNewStart: 45,      // 新しい選択：ウェーブの残りこの秒数から
+    msNewEnd: 10,        // 新しい選択：残りこの秒数で、相手の先頭が中央を越えていなければ終了
     msT: null,           // 月太陽の火力の撃ち続ける秒（null＝長く撃つときの式）
     paraSwitch: true,    // 極の調和目指し通常：楽園マスにスイッチを置く手（いちばん後ろ）
     paraSwitchOff: ['paradiseScopeCombo'], // 楽園マスにスイッチを置く手をしない対面
@@ -606,6 +624,7 @@ RD.defineAgent('yinyang_royal_ranker', {
     let everH = false, jamCell = null, pt = { wave: -1, need: 0 }, knightCast = null; // ノーマル対面
     let fHist = [], waveSeen = null, waveStartT = 0, firedWave = null;                // ロイヤルを打つ判断（D・R）
     let jkRoyalW = null;             // ロイヤルそろえの打つ手なし：ジョーカーでロイヤルをコピーしたウェーブ（そのウェーブはロイヤルだけコピー）
+    let msNew = null, msNewEndW = null;   // 月太陽対面：新しい選択か（試合の最初に決める）・ロイヤル攻撃を終了したウェーブ
     let leonFiredW = null;           // 月太陽ロイヤル：レオンのボスでロイヤル攻撃を打ったウェーブ
     let thr = null, thrHot = false;  // スイッチ絞り：{ mode:'nut'|'sw'|'line', home（陰陽の元のマス）, yyId, swId, nutId }・活性させている途中
     const vsAssassin = (ctx.info.opponentDeck || []).some(d => d.type === 'assassin');
@@ -1401,7 +1420,14 @@ RD.defineAgent('yinyang_royal_ranker', {
         const sunAct = sunAC.includes(ob.filter(d => d && d.type === 'sun').length);
         const W = obs.wave;
         let why = null;
-        if (W >= o.msEarlyFrom && W < o.msLateFrom) {
+        if (msNew == null) { msNew = ctx.rng() < o.msNewPlan; ctx.log(`月太陽対面：${msNew ? '新しい選択（W' + o.msNewWaves.join('・W') + 'の残り' + o.msNewStart + '秒から、太陽が活性ならロイヤル攻撃）' : 'いままでの打つ条件'}`); }
+        if (msNew) {
+          const tl = obs.timeLeft;
+          if (obs.phase === 'wave' && o.msNewWaves.includes(W) && tl != null && tl <= o.msNewStart && msNewEndW !== W) {
+            if (tl <= o.msNewEnd && front <= o.msCenter) { msNewEndW = W; ctx.log(`W${W} 残り${tl.toFixed(0)}秒：相手の先頭が中央を越えていないのでロイヤル攻撃を終了`); }
+            else if (sunAct) why = `新しい選択：W${W}の残り${Math.floor(tl)}秒、相手の太陽が活性`;
+          }
+        } else if (W >= o.msEarlyFrom && W < o.msLateFrom) {
           if (front > o.msCorner && sunAct) why = `相手の先頭が${o.msCorner}を越え、太陽が活性`;
           else if (front > o.msCenter && obs.timeLeft != null && obs.timeLeft >= o.msCenterLeft && sunAct) why = `相手の先頭が中央を越え、残り${Math.floor(obs.timeLeft)}秒で太陽が活性`;
           else if (obs.phase === 'intro' && obs.bossType === 'leon') why = 'レオンの演出中';
@@ -1419,6 +1445,11 @@ RD.defineAgent('yinyang_royal_ranker', {
           x = harmonyPlay(true); if (x) return x;
           const f = fireRoyal(true); if (f) { f.note += `（ロイヤル攻撃：${why}）`; return f; }
           return summon() || { ops: [] };
+        }
+        // 新しい選択：W5・W8・W10 でロイヤル攻撃をしないときは、いつもロイヤルそろえ
+        if (msNew && o.msNewWaves.includes(W)) {
+          if (!actReady) return summon() || { ops: [] };
+          return harmonyPlay(true) || summon() || { ops: [] };
         }
         // ロイヤル攻撃の下：極の調和の出目を6まで上げる
         if (o.msRaise6 && (x6 = raiseTo(6, '出目6までの出目上げ', false))) return x6;
