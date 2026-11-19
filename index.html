@@ -970,7 +970,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '6.0.0δ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '6.0.0ε';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -5826,13 +5826,17 @@ V('dice', 'nuke', { c2: '#f6b6a8',   // 赤い面に八方の閃光と赤い点�
 //       相手が止まっていた（アプリを離れていた）なら、戻ったときに代行した盤面を渡す。相手も動いていた（通信だけ切れた）なら、相手の盤面を優先する。
 const NET = (function () {
 'use strict';
-const PROTO = 3;          // 通信の形の版（両者で同じでなければつながない。3：本体 6.0.0〜）
+const PROTO = 4;          // 通信の形の版（両者で同じでなければつながない。3：本体 6.0.0β〜、4：6.0.0ε〜〔時間合わせ〕）
 const H = 1 / 60;         // 1ステップの秒
 const SNAP_EVERY = 0.25;  // 自分の盤面データを送る間隔（秒）
 const TAKEOVER = 3.0;     // 相手から何秒届かなければ代行するか
 const FREEZE = 2.0;       // 自分がこれ以上止まっていたら、相手に代行されていないか確かめる（秒）
 const HOLD = 1.5;         // その返事を待つ秒
 const PING_EVERY = 1.0;   // 往復時間を測る間隔（秒）
+// 時間合わせ（6.0.0ε〜）：ウェーブの時間（抽選の始まりからボスが来るまで）を、両方の端末でそろえる
+const SYNC_DEAD = 0.08;   // これより小さいずれは直さない（秒）
+const SYNC_GAIN = 1.2;    // ずれ1秒あたり、進める速さを何倍変えるか
+const SYNC_MAXUP = 4;     // 遅れているときの最大の速さ（倍）
 const OPS = ['summon', 'powerUp', 'act', 'hover', 'special'];
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -5896,6 +5900,15 @@ function load(g, s) {
   if (!g.fx) g.fx = [];
 }
 
+// ウェーブの時計：抽選（roll）の始まりから数えた時間。抽選中と、ボスが来るまでのウェーブ中だけ。それ以外（ボス戦・待ち）は null
+//   W：そのウェーブの番号（抽選中は次のウェーブ）、c：秒
+function clockOf(g) {
+  if (!g || g.over) return null;
+  const rt = g.cfg.rollTime > 0 ? g.cfg.rollTime : 0;
+  if (g.phase === 'roll' && g.rollUntil != null) return { W: g.wave + 1, c: g.t - (g.rollUntil - rt) };
+  if (g.phase === 'wave' && g.waveStart != null && !(g.bossAt != null && g.t >= g.bossAt)) return { W: g.wave, c: g.t - g.waveStart + rt };
+  return null;
+}
 function cleanStart(start) { return JSON.parse(JSON.stringify(start)); }
 // 乱数（エンジンの makeRng と同じ mulberry32）。状態を get・set できる
 function netRng(seed) {
@@ -5957,7 +5970,7 @@ class Session {
     this.me = this.match.games[mySide]; this.mir = this.match.games[1 - mySide];
     this.match.auth[mySide] = true;
     this.match.onOver = loser => this.onOver(loser);
-    this.acc = 0; this.snapAcc = 0; this.sincePing = 0; this.silent = 0; this.hold = 0; this.rtt = null;
+    this.acc = 0; this.snapAcc = 0; this.rate = 1; this.gap = 0; this.pc = null; this.sync = true; this.sincePing = 0; this.silent = 0; this.hold = 0; this.rtt = null;
     this.standin = false; this.standinOver = false; this.dropEv = false; this.needBack = false; this.quiet = false;
     this.peerWave = this.me.wave; this.peerWait = false; this.declared = -1;
     this.opSeq = 0; this.peerOp = 0; this.castSeq = 0; this.castAt = 0; this.inOp = false; this.opCast = false;
@@ -6004,7 +6017,9 @@ class Session {
   }
   sendSnap() {
     const g = this.me;
-    this.send({ t: 's', s: snap(g), w: g.wave, p: g.phase === 'wait', a: this.peerOp });
+    const k = clockOf(g);
+    // p：次のウェーブへ進む用意ができている（待ち、または抽選に入った）。6.0.0ε〜：抽選中も true（待ち→抽選の知らせが続けて届くと、抽選の始まりが相手より3秒以上遅れていた）
+    this.send({ t: 's', s: snap(g), w: g.wave, p: g.phase === 'wait' || g.phase === 'roll', a: this.peerOp, k: k ? { W: k.W, c: k.c, r: this.rate } : null });
     this.snapAcc = 0;
   }
 
@@ -6016,7 +6031,7 @@ class Session {
     if (this.match.over) return;
     if (me.phase === 'wait') {
       if (this.declared !== me.wave) { this.declared = me.wave; this.sendSnap(); }
-      const peerDone = this.standin ? (mir.wave > me.wave || (mir.wave === me.wave && mir.phase === 'wait'))
+      const peerDone = this.standin ? (mir.wave > me.wave || (mir.wave === me.wave && (mir.phase === 'wait' || mir.phase === 'roll')))
         : (this.peerWave > me.wave || (this.peerWave === me.wave && this.peerWait));
       if (peerDone) this.roll();
     }
@@ -6041,11 +6056,25 @@ class Session {
     this.silent += real;
     this.quiet = this.silent > 1.0; // 相手から届かない間は、写しを先に進めない（代行が始まるまで）
     if (!this.standin && this.silent > TAKEOVER) { this.standin = true; this.match.auth[1 - this.mySide] = true; this.event('standin', {}); }
-    this.acc += real; let n = 0;
-    while (this.acc >= H && n < 8 && !this.match.over) { this.stepOnce(); this.acc -= H; n++; }
-    if (n >= 8) this.acc = 0;
+    this.rate = this.syncRate();
+    this.acc += real * this.rate; let n = 0;
+    while (this.acc >= H && n < 16 && !this.match.over) { this.stepOnce(); this.acc -= H; n++; }
+    if (n >= 16) this.acc = 0;
     this.snapAcc += real;
     if (this.snapAcc >= SNAP_EVERY && !this.match.over) this.sendSnap();
+  }
+  // 時間合わせ：自分と相手のウェーブの時計を比べ、進んでいれば遅く（大きく進んでいれば止める）、遅れていれば速く進める。
+  //   相手も同じことをするので、ずれは両側から縮まる。相手の時計は、届いた値に「届くまでの時間」と「届いてからの時間×相手の速さ」を足して見積もる
+  syncRate() {
+    this.gap = 0;
+    if (!this.sync || this.standin || this.quiet) return 1;
+    const mc = clockOf(this.me), pc = this.pc;
+    if (!mc || !pc || mc.W !== pc.W) return 1;
+    const since = Math.min(1, (nowMs() - pc.at) / 1000);
+    const d = mc.c - (pc.c + this.lat * pc.r + since * pc.r);
+    this.gap = d;
+    if (Math.abs(d) < SYNC_DEAD) return 1;
+    return d > 0 ? Math.max(0, 1 - d * SYNC_GAIN) : Math.min(SYNC_MAXUP, 1 - d * SYNC_GAIN);
   }
   // 自分が止まっていた（アプリを離れていた）あと：相手が代行していたら、その盤面を受け取る
   resumed() {
@@ -6084,6 +6113,7 @@ class Session {
       case 'p': this.send({ t: 'q', ts: msg.ts }); return;
       case 's': {
         if (typeof msg.w === 'number') { this.peerWave = msg.w; this.peerWait = !!msg.p; }
+        this.pc = msg.k && typeof msg.k.c === 'number' ? { W: msg.k.W, c: msg.k.c, r: Math.max(0, Math.min(SYNC_MAXUP, +msg.k.r || 1)), at: nowMs() } : null;
         if (m.over || !msg.s) return;
         if (this.castSeq && (msg.a || 0) < this.castSeq && nowMs() - this.castAt < 1500) return; // こちらの妨害が届く前の盤面：先に出した結果を戻さない
         this.castSeq = 0;
@@ -6177,7 +6207,7 @@ class Session {
   // 受け取った試合の状態から再開する（new Session の直後に呼ぶ）
   adoptSync(st) {
     try { load(this.me, st.you); load(this.mir, st.me); } catch (e) { return false; }
-    this.peerWave = this.mir.wave; this.peerWait = this.mir.phase === 'wait';
+    this.peerWave = this.mir.wave; this.peerWait = this.mir.phase === 'wait' || this.mir.phase === 'roll';
     if (st.over) { this.match.over = true; this.match.winner = st.winner; for (const g of this.match.games) g.over = true; }
     return true;
   }
@@ -6189,7 +6219,7 @@ function leaderIsMe(mySide, mine, theirs) {
   if (mine.id !== theirs.id) return mySide === 0; // 別の試合：ホストの試合を残す
   return false;                                     // 同じ試合：それぞれ自分の盤面を持っているので渡さない
 }
-return { PROTO, H, TAKEOVER, OPS, Session, OMatch, leaderIsMe, snap, load };
+return { PROTO, H, TAKEOVER, OPS, Session, OMatch, leaderIsMe, snap, load, clockOf };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = NET;
 </script>
@@ -8735,6 +8765,7 @@ function onlBar() {
       if (s.standin) p.push('<span class="n-err">相手の盤面を代わりに進めています</span>');
       else if (s.silent > 1) p.push(`<span class="n-err">相手から${s.silent.toFixed(0)}秒届いていません</span>`);
       if (s.hold > 0) p.push('相手の様子を確認中…');
+      if (Math.abs(s.gap) > 0.3) p.push(`時間を合わせています（${s.gap > 0 ? '進み' : '遅れ'} ${Math.abs(s.gap).toFixed(1)}秒）`);
     }
     t = p.join('　');
     if (onl.notice && performance.now() - onl.noticeT < 6000) t += '<br>' + esc(onl.notice);
