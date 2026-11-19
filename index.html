@@ -7845,7 +7845,8 @@ function curPool(){ const k=$('plSel').value; return allPools().find(p=>p.key===
 function fillPoolSel(want){
   const s=$('plSel'), list=allPools(), has=k=>!!k&&list.some(p=>p.key===k);
   let saved=null; try{ saved=localStorage.getItem(POOL_SEL); }catch(e){}
-  const pick = has(want) ? want : has(saved) ? saved : s.value; // 指定 → 前に選んでいたプール → いまの選択
+  const DEF='f:my_pool_copy'; // Web版：初めて開いたときは EXMatching
+  const pick = has(want) ? want : has(saved) ? saved : has(DEF) ? DEF : s.value; // 指定 → 前に選んでいたプール → EXMatching → いまの選択
   s.innerHTML='';
   list.forEach(p=>{ const o=document.createElement('option'); o.value=p.key; o.textContent=`${p.pool.name}（${p.src}・${p.pool.entries.length}件）`; s.appendChild(o); });
   if(has(pick)) s.value=pick;
