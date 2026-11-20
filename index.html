@@ -970,7 +970,7 @@ const PU_COST = [0, 100, 200, 400, 700]; // Lv1→2:100 …
 const TRACK_LEN = 12.0;
 const AI_API_VERSION = 1; // 自動操作AIの観測・操作の形式の版（互換が崩れる変更で上げる）
 const SIM_NAME = 'AIRandomDicesim';
-const SIM_VERSION = '6.0.0η';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
+const SIM_VERSION = '6.0.0τ';      // シミュレータ本体の版。エンジン・仕様を変えたら必ず上げる（REPLAY_GUIDE §6）
 const REPLAY_FORMAT_VERSION = 1;  // リプレイ（記録ファイル）の形式の版（練習 rd-replay）
 const BATTLE_REPLAY_FORMAT_VERSION = 1; // 対戦リプレイ（rd-replay-battle）の形式の版
 const LANE_X0 = 0, LANE_X1 = 5, LANE_Y = 3.5;
@@ -1100,7 +1100,8 @@ const BOSSES = {};        // id -> ボス定義（データ＋スキル）
 const FIELDS = {};        // id -> フィールドスキン
 const PATTERNS = {};      // id -> 相手の処理パターン（湧き方。練習モード用）
 const PENDING = {};       // kind -> 予告つきスキル（ハッキング・メテオ・暗殺）
-const ACTION_RULES = [];  // ダイスを重ねたときの操作ルール（order 昇順で評価）
+const ACTION_RULES = [];
+const HOLE_CELL = 15; // 重ねる先としてのホール（盤面の外。祝福ホール。6.0.0ο〜）：act(from, 15)。ダイスの holeRule(g, a, from) が操作を返す  // ダイスを重ねたときの操作ルール（order 昇順で評価）
 const PLUGINS = [];       // setup を持つプラグイン（Game 生成時に呼ぶ）
 const PARAMS = {};        // key -> 設定項目（cfg のキー）。既定値・設定画面の表示・ログへの出し方
 const DIE_EFFECTS = {};   // id -> ダイスに付く状態（封印・沈黙・ハッキング・懸賞金の印）
@@ -1790,6 +1791,7 @@ class Game {
   }
   // from を to に重ねる。成功時は結果の種類（ルールの result）を返す
   findRule(from, to) {
+    if (to === HOLE_CELL) return this.holeRule(from);
     if (this.over || from === to) return null;
     const a = this.board[from], b = this.board[to];
     if (!a || !b || a.sealed || b.sealed) return null;
@@ -1797,7 +1799,25 @@ class Game {
     return null;
   }
   canAct(from, to) { const r = this.findRule(from, to); return r ? r.result : null; }
+  holeRule(from) { // ホールに重ねる操作（6.0.0ο〜）
+    if (this.over || !Number.isInteger(from) || from < 0 || from >= 15) return null;
+    const a = this.board[from]; if (!a || a.sealed) return null;
+    for (const t of this.cfg.deck) { const D = DICE[t]; const r = D && D.holeRule && D.holeRule(this, a, from); if (r) return r; }
+    return null;
+  }
+  holeAct(from) {
+    const r = this.holeRule(from); if (!r) return null;
+    if (!this.emit('beforeAction', { rule: r, from, to: HOLE_CELL })) return null;
+    const da = this.board[from], a = this.dieStr(da);
+    r.run(this, from, HOLE_CELL, da, null);
+    this.L(`${this.tag}${r.label}：${this.cellName(from)} ${a}`);
+    { const D = DICE[da.type]; if (D.afterAct) D.afterAct(this, da, r, from, HOLE_CELL); }
+    this.emit('action', { rule: r, result: r.result, from, to: HOLE_CELL });
+    return r.result;
+  }
+  legalHoles() { const out = []; if (this.over) return out; for (let a = 0; a < 15; a++) { const r = this.holeRule(a); if (r) out.push({ from: a, to: HOLE_CELL, result: r.result }); } return out; }
   act(from, to) {
+    if (to === HOLE_CELL) return this.holeAct(from);
     const r = this.findRule(from, to);
     if (!r) return null;
     if (!this.emit('beforeAction', { rule: r, from, to })) return null;
@@ -2426,12 +2446,21 @@ class Game {
         powerUp: c.deck.filter(type => !this.over && this.sp >= this.puCost(type)).map(aiType),
         special: c.deck.filter(type => this.canSpecial(type)).map(aiType), // いま使える特別な操作（超越。5.1.0〜）
         acts: this.legalActs(),
+        holes: this.legalHoles(), // ホールに重ねる操作（祝福ホール。6.0.0ο〜）：{from, to:15, result:'blessHole'}。acts には入れない
         hovers: this.legalHovers() },
     };
   }
   // 「重ねる」操作の検証。{reason}（実行できない理由）か {rule}（使われるルール）を返す。状態は変えない
   validateAct(op) {
     const { from, to } = op;
+    if (to === HOLE_CELL) { // ホール（6.0.0ο〜）
+      if (!(Number.isInteger(from) && from >= 0 && from < 15)) return { reason: 'badCell' };
+      const a = this.board[from]; if (!a) return { reason: 'empty' };
+      if (op.fromId != null && a.id !== op.fromId) return { reason: 'stale' };
+      if (a.sealed) return { reason: 'sealed' };
+      const r = this.holeRule(from); if (!r) return { reason: 'noRule' };
+      return { rule: r };
+    }
     const okCell = x => Number.isInteger(x) && x >= 0 && x < 15;
     if (!okCell(from) || !okCell(to)) return { reason: 'badCell' };
     const a = this.board[from], b = this.board[to];
@@ -3575,8 +3604,9 @@ defineDice('lightsword', { name: '光の剣', rar: 'L', color: '#4fb4e6', atk: [
 //   「接続数」n＝上下左右でつながっている歯車の塊の大きさ−1（自分以外の歯車の数）。攻撃速度 4.0秒（3.14.2〜）
 //   ・自バフ：攻撃力 ＋基本攻撃力×0.5×n、攻撃回数 ×(1＋0.3×n)（月などの攻撃速度バフとは別枠）
 //   ・上下の両方に歯車がある中央の歯車は、攻撃のたびに50%で、ランダムな敵へ n 回の追加攻撃（1発ごとに抽選。3.14.1〜。両方は 3.14.2〜）
-//   ・左右の両方に歯車がある中央の歯車は、当たるたびに対象の現在HPの 1.15^n % の割合ダメージ（両方は 3.14.2〜、1.15^n は 3.15.1〜）。活性の歯車だけ (1+0.01n)^r %、ボス扱いには (1+0.01n)^r − 0.5 %（r＝出目。3.15.3〜）
-//   ・塊が8個以上の間、塊の中の1つ（ランダム）が活性：対象がランダム、さらに攻撃力 ×1.5^n・攻撃回数 ×1.2^n（3.14.1〜。3.14.0 は 1.3^n）
+//   ・左右の両方に歯車がある中央の歯車は、当たるたびに n% の確率で、対象の現在HPの割合ダメージ（雑魚10%・ボス／中ボス1%）。活性の歯車は持たない（6.0.0ρ〜。両方は 3.14.2〜）
+//     （6.0.0π まで：1.15^n %、活性の歯車は (1+0.01n)^出目 %、ボス扱いは −0.5 %）
+//   ・塊が8個以上の間、塊の中の1つ（ランダム）が活性：対象がランダム、さらに攻撃力 ×Π(1.2＋ほかの歯車の出目×0.1)（6.0.0τ〜。6.0.0σ は 1.1＋、6.0.0ρ は 1.1＋で ÷7。ほかの歯車＝塊の自分以外の強化歯車・RD2歯車・ギアセカンド。6.0.0π までは 1.5^n）・攻撃回数 ×1.2^n（3.14.1〜。3.14.0 は 1.3^n）
 //     活性は、活性の歯車を同じ塊の別の歯車にドラッグして移せる（同じ出目でも合成しない）。活性の歯車が盤面から消えたら選び直す
 function gearCells(g) { const out = []; for (let i = 0; i < 15; i++) { const d = g.board[i]; if (d && d.type === 'gear') out.push(i); } return out; }
 // 歯車の仲間（5.5.0〜）：強化歯車・RD2歯車・ギアセカンドは、上下左右でつながれば同じ塊（個数に関わる判定はすべて全種類を数える）
@@ -3592,6 +3622,8 @@ function gearUpdate(g) {
       const d = g.board[i], [r, c] = g.rc(i), isG = j => { const e = g.board[j]; return !!(e && GEAR_KIN[e.type]); };
       if (d.type !== 'gear') continue; // RD2歯車・ギアセカンドは数えるだけ（自分の値は g2Update が書く）
       d.gearN = grp.length - 1; d.gearGrp = grp[0]; d.gearSize = grp.length;
+      // 活性の攻撃力倍率（6.0.0ρ〜）：塊の自分以外の歯車（強化歯車・RD2歯車・ギアセカンド）ごとに ×(1.2＋出目×0.1)（6.0.0τ〜。6.0.0ρ は (1.1＋出目×0.1) で最後に ÷7、6.0.0σ は (1.1＋出目×0.1)）
+      { let m = 1; for (const j of grp) if (j !== i) m *= 1.2 + 0.1 * g.board[j].pips; d.gearActMul = m; }
       // 3.14.2〜：上下の両方（左右の両方）に歯車がある「中央の歯車」だけ（3.14.1 までは片方でよかった）
       d.gearV = r > 0 && r < 2 && isG(i - 5) && isG(i + 5);
       d.gearH = c > 0 && c < 4 && isG(i - 1) && isG(i + 1);
@@ -3605,9 +3637,9 @@ function gearUpdate(g) {
   }
 }
 defineDice('gear', { name: '強化歯車', rar: 'L', ex: true, fixedClass: 15, color: '#7b8494', atk: [100, 0, 100], spd: [4.0, 0], // 攻撃速度 4.0秒（3.14.2〜。3.14.1 までは 2.0秒）
-  desc: 'EX（総合環境＝複合のみ）・クラス15限定。前方。つながった歯車の数だけ攻撃力と攻撃回数が上がる。上下の両方に歯車があると50%でランダムな敵へ追加攻撃、左右の両方に歯車があると現在HPの割合ダメージ。8個以上つながると1つが活性（対象ランダム・さらに倍率）。活性は同じ塊の歯車にドラッグで移せる。',
+  desc: 'EX（総合環境＝複合のみ）・クラス15限定。前方。つながった歯車の数だけ攻撃力と攻撃回数が上がる。上下の両方に歯車があると50%でランダムな敵へ追加攻撃、左右の両方に歯車があると、つながった数％の確率で現在HPの割合ダメージ（雑魚10%・ボス／中ボス1%。活性の歯車は持たない）。8個以上つながると1つが活性（対象ランダム。攻撃力×Π(1.2＋ほかの歯車の出目×0.1)、攻撃速度×1.2^つながった数）。活性は同じ塊の歯車にドラッグで移せる。',
   deckTick(g) { gearUpdate(g); },
-  baseAtk(g, d) { const b = g.stat('gear', 'atk'), n = d.gearN || 0; let a = b * (1 + 0.5 * n); if (d.gearAct) a *= Math.pow(1.5, n);
+  baseAtk(g, d) { const b = g.stat('gear', 'atk'), n = d.gearN || 0; let a = b * (1 + 0.5 * n); if (d.gearAct) a *= d.gearActMul || 0; // 活性：Π(1.2＋ほかの歯車の出目×0.1)（6.0.0τ〜。6.0.0σ は 1.1＋、6.0.0ρ は 1.1＋で ÷7、それまでは 1.5^n）
     // 同じ塊のギアセカンドの強化・パワーを受ける（5.5.0〜）：×(1＋((出目＋連結数−1)×強化の合計＋パワーの数×(100＋50×クラス))÷100)。クラスはギアセカンド（RD2歯車）のもの。超越の (20＋クラス) は入れない
     if (d.g2Str || d.g2Pow) a *= 1 + ((d.g2Str || 0) + (d.g2Pow || 0) * (100 + 50 * g.cls('rd2gear'))) / 100; // 5.5.3〜 強化ギアの値は1回だけ足す
     return a; },
@@ -3619,14 +3651,16 @@ defineDice('gear', { name: '強化歯車', rar: 'L', ex: true, fixedClass: 15, c
       const v = g.cfg.bulletSpeed > 0 ? g.cfg.bulletSpeed : 1e9;
       for (let k = 0; k < n; k++) { const al = g.alive(); if (!al.length) break; const e = g.pick(al), [qx, qy] = g.posXY(e.pos);
         g.shots.push(Object.assign({}, shot, { extra: true, tgt: e, at: g.t + Math.hypot(qx - shot.x, qy - shot.y) / v })); }
-      g.addFx('scopeProc', { cell: i }, 0.05); g.emit('gearExtra', { cell: i, n });
+      g.addFx('scopeProc', { cell: i, col: '#111318' }, 0.05); g.emit('gearExtra', { cell: i, n }); // 黒（6.0.0θ〜）
     }
   },
   afterHit(g, s) {
     if (!s.gearH || !(s.gearN > 0) || !s.tgt.alive) return;
+    // 割合（6.0.0ρ〜、ユーザー指定）：活性でない歯車だけ。n% の確率で、雑魚は現在HPの10%、ボス・中ボスは1%
+    //   （3.15.3〜6.0.0π：通常 1.15^n %、活性 (1+0.01n)^出目 %、ボス扱いは −0.5）
+    if (s.gearAct || !(g.rng() < 0.01 * s.gearN)) return;
+    const pct = g.isBossLike(s.tgt) ? 1 : 10;
     g.addFx('gearHit', { pos: s.tgt.pos, eid: s.tgt.id }, 0.35);
-    // 割合（%）：通常は 1.15^n。活性の歯車だけ (1+0.01n)^r、ボス扱いには (1+0.01n)^r − 0.5（r＝出目。3.15.3〜、ユーザー指定）
-    const pct = s.gearAct ? Math.pow(1 + 0.01 * s.gearN, s.gearPips) - (g.isBossLike(s.tgt) ? 0.5 : 0) : Math.pow(1.15, s.gearN);
     const amt = s.tgt.hp * 0.01 * pct; g.damage(s.tgt, amt, s.d);
     g.emit('pctHit', { enemy: s.tgt, amount: amt, die: s.d, lane: 1, src: 'gear' }); // 表示用（3.15.2〜）
   },
@@ -3635,7 +3669,7 @@ defineDice('gear', { name: '強化歯車', rar: 'L', ex: true, fixedClass: 15, c
     run(g, from, to, a, b) { a.gearAct = false; b.gearAct = true; g.note('強化歯車：活性を移した'); } }],
   effects: { gearAct: { str: d => d.gearAct ? '活' : '', digest: d => d.gearAct ? 'a' : '',
     observe(g, d, o) { if (d.gearAct) o.gearActive = true; }, publicObserve(d, o) { if (d.gearAct) o.gearActive = true; } } },
-  observe(g, d) { return { connected: d.gearN || 0, group: d.gearSize || 1, vertical: !!d.gearV, horizontal: !!d.gearH, active: !!d.gearAct }; } });
+  observe(g, d) { return { connected: d.gearN || 0, group: d.gearSize || 1, vertical: !!d.gearV, horizontal: !!d.gearH, active: !!d.gearAct, actMul: d.gearActMul || 0 }; } });
 
 // =====================================================================
 // v6.7.2（パーティーシーズン）で加わった・変わったダイス（4.0.0〜、ユーザー指定・スクリーンショット）
@@ -3931,19 +3965,21 @@ const BLESS_KINDS = [ // 6.0.0ζ〜（「祝福のダイス_変更案（6.0.0ε�
   { id: 'sp', name: '撃破時の獲得SP', v: [1, 2, 10], unit: '%' },
   { id: 'shots', name: '追加攻撃の弾丸数', v: [0.5, 1, 2], unit: '' }];
 const BLESS_RAR = ['コモン', 'レア', 'エピック', '伝説'];
-// 伝説の祝福（6.0.0ζ〜）：1%。出たら5つから均等に1つ
+// 伝説の祝福（6.0.0ζ〜）：2%（6.0.0π〜。それまでは1%）。出たら6つから均等に1つ（6.0.0ο〜。ロイヤル効果・祝福ホールは1試合に1回で、持っていれば残りから抽選し直す）
+const BLESS_BOOST = [{ kind: 'dmg', v: 200 }, { kind: 'spd', v: 100 }, { kind: 'sp', v: 100 }]; // 伝説の強化の中身（6.0.0π〜）
 const BLESS_LEGENDS = [
-  { id: 'royal', name: 'ロイヤル効果' },     // 合成した出目×2個の相手のダイスをロイヤルと同じく変化（星の+1なら出目7として14個）
+  { id: 'royal', name: 'ロイヤル効果' },     // 6.0.0ο〜：以後、祝福のダイスを合成するたびに、合成前の出目×2個の相手のダイスをロイヤルと同じく変化
   { id: 'bubble', name: 'バブル付与' },      // いまの盤面のダイスすべてにバブル
   { id: 'gauge', name: 'ゲージの最大値−1' }, // この試合中。重なる（下限1）
-  { id: 'five', name: '祝福効果を5つ獲得' }, // 通常の抽選を5回
-  { id: 'slot', name: '祝福のスロット' }];   // ランダムなマスに、試合中ずっと続くバフ
+  { id: 'boost', name: '伝説の強化' },     // 6.0.0π〜（旧 five）：最終ダメージ+200%・攻撃速度+100%・撃破SP+100% から均等に1つ。何度でも出て重なる
+  { id: 'slot', name: '祝福のスロット' },    // ランダムなマスに、試合中ずっと続くバフ
+  { id: 'hole', name: '祝福ホール' }];       // 6.0.0ο〜：像の上の金色のホール。自分のダイスを重ねると消せる（クールダウン60秒）
 defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color: '#d9a52e', atk: [60, 0, 0], spd: [1.0, 0], gaugeMax: 10, starEvery: 20,
   gaugeMul: [{ p: 0.2, m: 3 }, { p: 0.1, m: 5 }], // 合成でゲージがたまる量の倍率（6.0.0ζ〜：20%で3倍・10%で5倍・残りは等倍）
-  legendP: 0.01, extraP: 0.5, gaugeMin: 1,         // 伝説の確率・追加攻撃の確率（一律）・ゲージの最大値の下限
-  slotDmg: 1.0, slotSpd: 1.0,                      // 祝福のスロット：最終ダメージ +100%・攻撃速度 +100%（祝福の合計に足す）・会心率は楽園のマスと同じ
+  legendP: 0.02, extraP: 0.2, gaugeMin: 1,         // 伝説の確率・追加攻撃の確率（一律。6.0.0ζ 50% → 6.0.0κ 20%）・ゲージの最大値の下限
+  slotDmg: 1.0, slotSpd: 1.0, holeCd: 60,         // holeCd：祝福ホールのクールダウン（秒。6.0.0ο〜）                      // 祝福のスロット：最終ダメージ +100%・攻撃速度 +100%（祝福の合計に足す）・会心率は楽園のマスと同じ
   kinds: BLESS_KINDS, rarities: BLESS_RAR, legends: BLESS_LEGENDS,
-  desc: 'EX（複合のみ）。前方。合成すると出目の分だけ祝福ゲージがたまり（20%で3倍・10%で5倍）、満タン（10）ごとにランダムな祝福効果（すべてのダイスに試合中ずっとかかる）を得る。1%で伝説の祝福（ロイヤル効果・バブル付与・ゲージ最大値−1・祝福効果5つ・祝福のスロット）。出目7は20秒ごとにゲージ+1。',
+  desc: 'EX（複合のみ）。前方。合成すると出目の分だけ祝福ゲージがたまり（20%で3倍・10%で5倍。出目7の20秒ごとの+1も同じ）、満タン（10）ごとにランダムな祝福効果（すべてのダイスに試合中ずっとかかる）を得る。追加攻撃は弾1発ごとに20%。2%で伝説の祝福（ロイヤル効果〔以後、合成ごと〕・バブル付与・ゲージ最大値−1・伝説の強化〔最終ダメージ+200%／攻撃速度+100%／撃破SP+100%〕・祝福のスロット・祝福ホール）。出目7は20秒ごとにゲージ+1。',
   state(g) { return g.vars.bless || (g.vars.bless = { gauge: 0, n: 0, max: this.gaugeMax, t10: { dmg: 0, spd: 0, cd: 0, crit: 0, sp: 0, shots: 0 }, log: [], crit0: g.baseCrit, slots: [], legends: 0 }); },
   maxOf(g) { const B = this.state(g); return B.max != null ? B.max : this.gaugeMax; },
   slotAt(g, i) { const B = g.vars.bless; return !!B && !!B.slots && i >= 0 && B.slots.includes(i); },
@@ -3970,24 +4006,33 @@ defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color:
     g.addFilter('buffs', (out, c) => { if (B.slots.length && c && B.slots.includes(c.i)) out.crit = Math.max(out.crit, g.baseCrit + D.slotCrit(g)); return out; });
   },
   init(g, d) { d.blessT = 0; },
-  tick(g, i, d, dt) { // 出目7：20秒に1回ゲージ+1（封印中は tick が呼ばれないので止まる）。倍率なし。伝説のロイヤル効果は出目7として数える
+  tick(g, i, d, dt) { // 出目7：20秒に1回ゲージ+1（封印中は tick が呼ばれないので止まる）。6.0.0λ〜：合成と同じく倍率の抽選と粒の演出。伝説のロイヤル効果は出目7として数える
     if (d.pips !== 7) return;
     d.blessT += dt;
-    while (d.blessT >= this.starEvery - 1e-9) { d.blessT -= this.starEvery; this.addGauge(g, 1, 7); }
+    while (d.blessT >= this.starEvery - 1e-9) { d.blessT -= this.starEvery; this.gain(g, i, 1, 7); }
   },
-  onMerge(g, m) { // 合成：出目の分だけゲージ。20%で3倍・10%で5倍（6.0.0ζ〜）
+  onMerge(g, m) { // 合成：出目の分だけゲージ。伝説のロイヤル効果を持っていれば（この合成で出たときも）、合成前の出目×2個の相手のダイスを変化（6.0.0ο〜）
+    this.gain(g, m.to, m.pips, m.pips);
+    const B = this.state(g);
+    if (B.royal) { const k = Math.max(1, Math.min(7, m.pips)) * 2; B.lastRoyal = k; g.castOpp('祝福のロイヤル', o => { if (!g.oppBlocked(o, '祝福のロイヤル')) this.royalStrike(g, o, k); }); }
+  },
+  // 祝福ホール（6.0.0ο〜）：持っていて、クールダウンが終わっていれば、封印されていない自分のダイスを重ねて消せる。消えた扱いは合成と同じ（生贄のSP・懸賞金など）
+  holeReady(g) { const B = g.vars.bless; return !!(B && B.hole) && g.t >= B.hole.readyAt - 1e-9; },
+  holeRule(g, a, from) { return this.holeReady(g) ? BLESS_HOLE_RULE : null; },
+  // ゲージを n 増やす（合成・星の共通）：20%で3倍・10%で5倍（6.0.0ζ〜。星は 6.0.0λ〜）。cell から像へ粒が上り、3倍・5倍は文字（6.0.0ι〜）
+  gain(g, cell, base, pips) {
     const r = g.rng(); let mul = 1, acc = 0;
     for (const x of this.gaugeMul) { acc += x.p; if (r < acc) { mul = x.m; break; } }
-    const n = m.pips * mul;
-    g.addFx('blessOrb', { cell: m.to, n }, 1.3);
-    if (mul > 1) { g.note(`祝福：ゲージ${mul}倍（+${n}）`); g.emit('blessMul', { cell: m.to, n, mul }); }
-    this.addGauge(g, n, m.pips);
+    const n = base * mul;
+    g.addFx('blessOrb', { cell, n }, 1.3);
+    if (mul > 1) { g.note(`祝福：ゲージ${mul}倍（+${n}）`); g.addFx('blessMul', { cell, mul }, 1.3); g.emit('blessMul', { cell, n, mul }); }
+    this.addGauge(g, n, pips);
   },
   addGauge(g, n, pips) {
     const B = this.state(g); B.gauge += n;
     while (B.gauge >= this.maxOf(g)) { B.gauge -= this.maxOf(g); this.grant(g, pips); }
   },
-  // 満タンになったとき：1%で伝説、残りは通常の効果
+  // 満タンになったとき：2%で伝説（6.0.0π〜）、残りは通常の効果
   grant(g, pips) {
     if (g.rng() < this.legendP) this.grantLegend(g, pips);
     else this.grantNormal(g);
@@ -4005,12 +4050,25 @@ defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color:
   grantLegend(g, pips) {
     const B = this.state(g); let L = BLESS_LEGENDS[Math.floor(g.rng() * BLESS_LEGENDS.length)];
     const free = () => [...Array(g.board.length).keys()].filter(i => !B.slots.includes(i));
-    if (L.id === 'slot' && !free().length) { const o = BLESS_LEGENDS.filter(x => x.id !== 'slot'); L = o[Math.floor(g.rng() * o.length)]; } // 全マスに付いたあと：ほかの4つから
+    const ok = x => !(x.id === 'slot' && !free().length) && !(x.id === 'royal' && B.royal) && !(x.id === 'hole' && B.hole); // 1試合1回のもの・全マスに付いたスロットは除いて抽選し直す
+    if (!ok(L)) { const o = BLESS_LEGENDS.filter(ok); L = o[Math.floor(g.rng() * o.length)]; }
     B.n++; B.legends = (B.legends || 0) + 1;
     let detail = '';
-    if (L.id === 'royal') { // 相手の盤面のダイスを、合成した出目×2個（星の+1なら14個）ロイヤルと同じく変化。相手がいなければ何も起きない
-      const k = Math.max(1, Math.min(7, pips || 1)) * 2; B.lastRoyal = k; detail = `${k}個`;
-      g.castOpp('祝福のロイヤル', o => { if (!g.oppBlocked(o, '祝福のロイヤル')) this.royalStrike(g, o, k); });
+    if (L.id === 'boost') { // 伝説の強化（6.0.0π〜）：通常の祝福の合計に足す
+      const b = BLESS_BOOST[Math.floor(g.rng() * BLESS_BOOST.length)], K = BLESS_KINDS.find(x => x.id === b.kind);
+      B.t10[K.id] += Math.round(b.v * 10);
+      const e = { n: B.n, t: g.t, wave: g.wave, kind: K.id, legend: 'boost', name: `伝説：${K.name} +${b.v}${K.unit}`, detail: '', rarity: 3, value: b.v, unit: K.unit };
+      B.log.push(e);
+      g.addFx('blessGain', { text: `伝説　${K.name} +${b.v}${K.unit}`, rar: 3, n: B.n }, 3.2);
+      g.note(`祝福：伝説の強化「${K.name} +${b.v}${K.unit}」`);
+      g.emit('blessing', e);
+      return;
+    }
+    if (L.id === 'royal') { // 6.0.0ο〜：以後、合成するたびに発動（onMerge）。この合成で出たときは、この合成でも発動する
+      B.royal = true; detail = '以後、合成ごと';
+    } else if (L.id === 'hole') { // 6.0.0ο〜：すぐ使える
+      B.hole = { readyAt: g.t, used: 0 }; detail = '';
+      g.addFx('blessHoleOpen', {}, 1.4);
     } else if (L.id === 'bubble') { // いまの盤面のダイスすべてにバブル（性能はバブルの効果の既定どおり：デッキにあればそのクラス、なければクラス10・PU5）
       const vs = g.diceCells(); for (const i of vs) g.board[i].bubble = true;
       g.emit('bubbleOn', { cells: vs }); detail = `${vs.length}個`;
@@ -4025,7 +4083,6 @@ defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color:
     g.addFx('blessGain', { text: `伝説！${L.name}${detail ? `（${detail}）` : ''}`, rar: 3, n: B.n }, 3.2);
     g.note(`祝福：伝説の祝福「${L.name}」${detail ? `（${detail}）` : ''}`);
     g.emit('blessing', e);
-    if (L.id === 'five') for (let k = 0; k < 5; k++) this.grantNormal(g); // 5つの中に伝説は出ない
   },
   // ロイヤルと同じ変化を、ちょうど k 個（盤面より多ければ全部）。g：使う側、o：相手
   royalStrike(g, o, k) {
@@ -4034,18 +4091,27 @@ defineDice('blessdice', { name: '祝福のダイス', rar: 'L', ex: true, color:
     g.note(`祝福のロイヤル → 相手${vs.length}個の種類を変更`);
     o.note(`相手の祝福のロイヤル：${vs.length}個の種類が変わった`);
   },
-  afterFire(g, i, d, shot, tgt) { // 追加攻撃（6.0.0ζ〜 確率は一律50%。弾丸数が1未満の間は乱数を引かない）
+  afterFire(g, i, d, shot, tgt) { // 追加攻撃（確率は一律 extraP：6.0.0ζ 50%、6.0.0κ〜 20%。弾丸数が1未満の間は乱数を引かない）
     const t = this.state(g).t10, k = Math.floor(t.shots / 10); if (k < 1) return;
     if (!(g.rng() < this.extraP)) return;
     const v = g.cfg.bulletSpeed > 0 ? g.cfg.bulletSpeed : 1e9, others = g.shuffle(g.alive().filter(e => e !== tgt)).slice(0, k);
     for (const e of others) { const [qx, qy] = g.posXY(e.pos); g.shots.push(Object.assign({}, shot, { at: g.t + Math.hypot(qx - shot.x, qy - shot.y) / v, tgt: e, extra: true, bless: true })); }
-    if (others.length) g.addFx('scopeProc', { cell: i }, 0.05);
+    if (others.length) g.addFx('scopeProc', { cell: i, col: '#e6b422' }, 0.05); // 金色（6.0.0θ〜）
   },
   totals(g) { const t = this.state(g).t10, o = {}; for (const K of BLESS_KINDS) o[K.id] = t[K.id] / 10; return o; },
   deckObserve(g) { const B = this.state(g);
-    return { gauge: B.gauge, gaugeMax: this.maxOf(g), blessings: B.n, legends: B.legends || 0, slots: (B.slots || []).slice(), total: this.totals(g), extraShots: Math.floor(B.t10.shots / 10), extraProb: this.extraP,
+    return { royal: !!B.royal, hole: B.hole ? { ready: this.holeReady(g), cdLeft: Math.max(0, B.hole.readyAt - g.t), used: B.hole.used, cell: HOLE_CELL } : null,
+      gauge: B.gauge, gaugeMax: this.maxOf(g), blessings: B.n, legends: B.legends || 0, slots: (B.slots || []).slice(), total: this.totals(g), extraShots: Math.floor(B.t10.shots / 10), extraProb: this.extraP,
       recent: B.log.slice(-10).map(e => ({ n: e.n, t: e.t, wave: e.wave, kind: e.kind, legend: e.legend, rarity: e.rarity, value: e.value })) }; },
   observe(g, d) { return { starLeft: d.pips === 7 ? this.starEvery - d.blessT : null }; } });
+
+// 祝福ホールに重ねる操作（act(from, HOLE_CELL)。6.0.0ο〜）：ダイスを消す。消えた扱いは合成と同じ（cause 'merge'）
+const BLESS_HOLE_RULE = { id: 'blessHole', result: 'blessHole', label: '祝福ホール',
+  run(g, from, to, a) { const B = g.vars.bless, D = DICE.blessdice;
+    g.board[from] = null; g.onRemoved(a, 'merge');
+    B.hole.readyAt = g.t + D.holeCd; B.hole.used++;
+    g.addFx('blessHoleSuck', { cell: from, type: a.type, pips: a.pips }, 0.6);
+    g.emit('blessHole', { cell: from, die: a }); } };
 
 // =====================================================================
 // RD2歯車／ギアセカンド（EX。5.4.0〜、ユーザー指定：「RD2歯車・ギアセカンド_仕様（案）」）。総合環境（複合）だけ。クラス10〜。既存の強化歯車（'gear'）とは別物
@@ -4099,7 +4165,7 @@ defineDice('rd2gear', { name: 'RD2歯車', rar: 'H', ex: true, classMin: 10, cla
     const v = g.cfg.bulletSpeed > 0 ? g.cfg.bulletSpeed : 1e9;
     for (let k = 0; k < d.pips; k++) { const al = g.alive(); if (!al.length) break; const e = g.pick(al), [qx, qy] = g.posXY(e.pos);
       g.shots.push(Object.assign({}, shot, { extra: true, tgt: e, at: g.t + Math.hypot(qx - shot.x, qy - shot.y) / v })); }
-    g.addFx('scopeProc', { cell: i }, 0.05);
+    g.addFx('scopeProc', { cell: i, col: '#2f6fd8' }, 0.05); // 青（6.0.0θ〜）
   },
   deckTick(g) {
     const S = g2State(g), big = g2Update(g);
@@ -4731,7 +4797,7 @@ class AgentController {
     if (v.reason) return Object.assign(base, { reason: v.reason });
     if (this.dragTime <= 0) { const r = g.applyOp(op); if (r.ok) this.lastActAt = g.t; return r; }
     this.lastActAt = g.t;
-    this.drag = { from: op.from, to: op.to, fromId: g.board[op.from].id, toId: g.board[op.to].id, expect: op.expect,
+    this.drag = { from: op.from, to: op.to, fromId: g.board[op.from].id, toId: g.board[op.to] ? g.board[op.to].id : null, expect: op.expect,
       result: v.rule.result, start: g.t, end: g.t + this.dragTime };
     return { ok: true, op: 'act', from: op.from, to: op.to, result: v.rule.result, pending: true }; // 実行はドラッグを離した時点
   }
@@ -5080,7 +5146,7 @@ function replayMatch(data, opt) {
   return { ok: mismatches.length === 0, match: m, mismatches };
 }
 
-function actionLabel(result) { const r = ACTION_RULES.find(x => x.result === result); return r ? (r.hint || r.label) : result; }
+function actionLabel(result) { const r = ACTION_RULES.find(x => x.result === result); return r ? (r.hint || r.label) : result === 'blessHole' ? '祝福ホール（ダイスを消去）' : result; }
 
 // #####################################################################
 // 【6 公開物】
@@ -5414,26 +5480,28 @@ V('fx', 'bmSplash', { latestBy: 'die', draw({ ctx, X, Y, S }, g, f, a) {
   ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(X(x), Y(y), R, 0, 7); ctx.fill(); } });
 // 祝福のダイス（5.3.0〜）：クリーム色の面に金の枠、四つ角の星と小さな星4つ、下に月桂樹の葉。
 //   像（over）：2つ目の角の先のレーン中央の上に浮かぶ、顔がダイスの羽つきの金の像と台。祝福ゲージを持つ。タップで祝福の一覧（panel）
+const BLESS_METAL = { c: '#c8961a', c2: '#fff1bf' }; // 祝福のダイスの金属の金（6.0.0μ〜）
 const BLESS_COL = ['#ffffff', '#5ee06a', '#c58bff', '#ff9a1a']; // コモン白・レア緑・エピック紫・伝説オレンジ（6.0.0ζ〜）
 function star4(ctx, x, y, R, r) { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, q = k % 2 ? r : R; ctx[k ? 'lineTo' : 'moveTo'](x + q * Math.cos(a), y + q * Math.sin(a)); } ctx.closePath(); }
-V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422', // 出目の点の中は金色（6.0.0δ〜。ふちは白のまま）
-  // 星（出目7）：次のゲージ+1までの時間（6.0.0η〜）。ダイスのまわりを青い輪が時計回りにたまり、下に残り秒数
-  overlay({ ctx, X, Y, S, g, d, cx, cy }) {
-    if (d.pips !== 7) return;
-    const E = RD.DICE.blessdice.starEvery, k = Math.max(0, Math.min(1, (d.blessT || 0) / E)), x = X(cx), y = Y(cy), R = 0.4 * S;
-    ctx.save(); ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(20,24,34,.35)'; ctx.lineWidth = Math.max(2, 0.05 * S); ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.stroke();
-    if (k > 0) { ctx.strokeStyle = k > 0.85 ? '#ffd23f' : '#58b8ff'; ctx.lineWidth = Math.max(2.5, 0.06 * S); ctx.beginPath(); ctx.arc(x, y, R, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); ctx.stroke(); }
-    const tx = Math.max(0, Math.ceil(E - (d.blessT || 0))) + '秒', fy = y + R + 0.02 * S;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${0.15 * S}px sans-serif`; ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(2.5, 0.045 * S); ctx.strokeStyle = 'rgba(10,12,18,.9)'; ctx.strokeText(tx, x, fy); ctx.fillStyle = '#ffffff'; ctx.fillText(tx, x, fy);
-    ctx.restore(); },
-  glyph(p, x, y, r, c) { const ctx = p.ctx; ctx.fillStyle = c; star4(ctx, x, y, r * 1.05, r * 0.3); ctx.fill();
+V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true,
+  bar: (g, d) => d.pips === 7 ? Math.max(0, Math.min(1, (d.blessT || 0) / RD.DICE.blessdice.starEvery)) : null, // 星：次のゲージ+1までのたまり具合（成長と同じ下のゲージ）
+  barColor: () => '#f5c400', // 金色
+  pipColor: () => '#fff3c8/#b8860b/2.2', // 出目の点：中は白に近い金・縁は金（6.0.0μ〜。6.0.0δ〜ε は中が金・縁が白）
+  palette: () => BLESS_METAL, rim: ['#fff6cf', '#e6b628', '#8f6208', '#f4d15e', '#a87410'], // 金属の金：枠に光の当たった金のグラデーション（6.0.0μ〜）
+  glyph(p, x, y, r, c) { const ctx = p.ctx; if (p.die && p.die.pips > 0) ctx.globalAlpha *= 0.4; // 盤面（対戦中）では薄く。アイコン（カバンなど）はそのまま（6.0.0μ〜）
+    ctx.fillStyle = c; star4(ctx, x, y, r * 1.05, r * 0.3); ctx.fill();
     for (const [dx, dy] of [[-0.75, -0.7], [0.75, -0.7], [-0.75, 0.7], [0.75, 0.7]]) { star4(ctx, x + dx * r, y + dy * r, r * 0.28, r * 0.09); ctx.fill(); } },
-  deco({ ctx, S }, g, d, b, C) { // 月桂樹の葉（面の下の左右）
-    ctx.save(); ctx.fillStyle = '#f0cf6a'; ctx.strokeStyle = '#b8862a'; ctx.lineWidth = Math.max(1, 0.01 * S);
-    for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) { const a = (0.5 + k * 0.42) * sx, lx = b.px + sx * (0.2 - k * 0.055) * S, ly = b.y + b.fh - (0.06 + k * 0.05) * S;
-      ctx.save(); ctx.translate(lx, ly); ctx.rotate(-a); ctx.beginPath(); ctx.ellipse(0, 0, 0.035 * S, 0.075 * S, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  deco({ ctx, S }, g, d, b, C) { // 月桂樹の葉（面の下の左右）。6.0.0μ〜：面に斜めの光（金属のつや）
+    { ctx.save(); const r0 = 0.12 * S * 0.9; ctx.beginPath(); ctx.moveTo(b.x + r0, b.y); ctx.arcTo(b.x + b.w, b.y, b.x + b.w, b.y + b.fh, r0); ctx.arcTo(b.x + b.w, b.y + b.fh, b.x, b.y + b.fh, r0); ctx.arcTo(b.x, b.y + b.fh, b.x, b.y, r0); ctx.arcTo(b.x, b.y, b.x + b.w, b.y, r0); ctx.closePath(); ctx.clip();
+      const lg = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.fh); lg.addColorStop(0, 'rgba(255,236,170,.0)'); lg.addColorStop(0.28, 'rgba(255,255,255,.55)'); lg.addColorStop(0.36, 'rgba(255,224,120,.12)'); lg.addColorStop(0.62, 'rgba(214,160,30,.22)'); lg.addColorStop(1, 'rgba(150,100,10,.30)');
+      ctx.fillStyle = lg; ctx.fillRect(b.x, b.y, b.w, b.fh); ctx.restore(); }
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(1, 0.009 * S); // 小さな天使の羽（下の両角。6.0.0ν〜）
+    for (const sx of [-1, 1]) { const rx = b.px + sx * 0.29 * S, ry = b.y + b.fh - 0.06 * S;
+      for (let k = 2; k >= 0; k--) { const L = (0.13 - k * 0.022) * S, an = -1.05 + k * 0.33, ex = rx + sx * L * Math.cos(an), ey = ry + L * Math.sin(an), w = (0.042 - k * 0.005) * S;
+        const nx = -Math.sin(an) * w, ny = Math.cos(an) * w;
+        ctx.beginPath(); ctx.moveTo(rx, ry); ctx.quadraticCurveTo((rx + ex) / 2 - sx * nx, (ry + ey) / 2 - ny * 1.4, ex, ey); ctx.quadraticCurveTo((rx + ex) / 2 + sx * nx * 0.4, (ry + ey) / 2 + ny * 0.6, rx, ry + 0.012 * S); ctx.closePath();
+        ctx.fillStyle = k ? '#fff6dc' : '#ffffff'; ctx.strokeStyle = '#b8860b'; ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = '#e6b628'; ctx.beginPath(); ctx.arc(rx, ry + 0.006 * S, 0.018 * S, 0, 7); ctx.fill(); }
     ctx.restore(); },
   spot: { x: 5, y: 1.75, r: 0.55 }, // 像の位置（盤面の単位）と、タップの半径
   over(p, g) {
@@ -5476,12 +5544,64 @@ V('dice', 'blessdice', { c2: '#fff6dc', noDragon: true, pipColor: () => '#e6b422
     const tot = D.kinds.map(K => `<div class="bl-row"><span>${K.name}</span><b>+${f(t[K.id])}${K.unit}</b></div>`).join('');
     const ex = `<div class="bl-note">追加攻撃：弾1発ごとに ${Math.round(D.extraP * 100)}% で、ほかの敵 ${Math.floor(t.shots)}体へ（弾丸数は切り捨て）</div>`;
     const sl = B.slots && B.slots.length ? `<div class="bl-note" style="color:${BLESS_COL[3]}">祝福のスロット：${B.slots.map(i => g.cellName(i)).join('、')}（最終ダメージ+${D.slotDmg * 100}%・攻撃速度+${D.slotSpd * 100}%・会心率${Math.round(D.slotCrit(g) * 1000) / 10}%）</div>` : '';
-    const log = B.log.slice().reverse().map(e => e.kind === 'legend'
+    const log = B.log.slice().reverse().map(e => e.rarity === 3 // 伝説（伝説の強化も。6.0.0π〜）
       ? `<div class="bl-log" style="color:${BLESS_COL[3]}">#${e.n}　${e.wave}W ${e.t.toFixed(0)}s　${e.name}${e.detail ? `（${e.detail}）` : ''}<small>伝説</small></div>`
       : `<div class="bl-log" style="color:${BLESS_COL[e.rarity]}">#${e.n}　${e.wave}W ${e.t.toFixed(0)}s　${e.name} +${e.value}${e.unit}<small>${D.rarities[e.rarity]}</small></div>`).join('') || '<div class="bl-note">まだ祝福はありません</div>';
     return `<h4>祝福　<small>ゲージ ${B.gauge}/${GM}　獲得 ${B.n}回${B.legends ? `（伝説 ${B.legends}回）` : ''}</small></h4><div class="bl-sec">いまの合計（すべてのダイスにかかる）</div>${tot}${ex}${sl}<div class="bl-sec">獲得した祝福（新しい順）</div>${log}<div class="bl-close">タップで閉じる</div>`;
   } });
+// 祝福のゲージ3倍・5倍（6.0.0ι〜）：合成したマスから「×3！」（緑）・「×5！」（紫・大きめ）が浮かぶ（1.3秒）
+V('fx', 'blessMul', { top: true, draw({ ctx, X, Y, S, W }, g, f, a) {
+  const [cx, cy] = g.cellXY(f.cell), t = 1 - a, big = f.mul >= 5, pop = t < 0.15 ? 0.6 + t / 0.15 * 0.4 : 1;
+  const fs = (big ? 0.46 : 0.32) * S * pop, tx = `×${f.mul}！`, y = Y(cy) - 0.1 * S - t * 0.45 * S;
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.font = `900 ${fs}px sans-serif`; ctx.globalAlpha = Math.min(1, a * 2.5);
+  const hw = ctx.measureText(tx).width / 2 + 4, x = Math.max(hw, Math.min(W - hw, X(cx)));
+  ctx.lineWidth = Math.max(3, fs * 0.22); ctx.strokeStyle = 'rgba(10,12,18,.95)'; ctx.strokeText(tx, x, y);
+  ctx.fillStyle = big ? '#c58bff' : '#5ee06a'; ctx.fillText(tx, x, y); ctx.restore(); } });
 // 祝福のスロットができた瞬間：マスに金色の光が広がる（6.0.0ζ〜）
+// 祝福ホール（6.0.0ο〜）：像の上の金色のブラックホール。使えるときは金の渦が回り、ダイスをつかんでいる間は脈打つ。クールダウン中は暗くして残り秒
+{ const BV = RD.DICE.blessdice.view, o0 = BV.over;
+  BV.holeSpot = { x: 5, y: 2.62, r: 0.4 };
+  BV.over = function (p, g) { o0.call(this, p, g); const B = g.vars.bless; if (B && B.hole) drawBlessHole(p, g, B, this.holeSpot); }; }
+function drawBlessHole(p, g, B, sp) {
+  const { ctx, X, Y, S } = p, x = X(sp.x), y = Y(sp.y), R = 0.26 * S, ready = g.t >= B.hole.readyAt - 1e-9, now = p.now || performance.now();
+  const dragging = ready && typeof window !== 'undefined' && window.__rdDragging && g === window.__rdDragGame;
+  ctx.save();
+  // 外の光
+  const pulse = dragging ? 0.5 + 0.5 * Math.sin(now / 120) : 0;
+  const og = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * (1.75 + 0.25 * pulse));
+  og.addColorStop(0, ready ? `rgba(255,214,90,${0.55 + 0.3 * pulse})` : 'rgba(150,130,90,.25)'); og.addColorStop(1, 'rgba(255,214,90,0)');
+  ctx.fillStyle = og; ctx.beginPath(); ctx.arc(x, y, R * 2, 0, 7); ctx.fill();
+  // 降着円盤（金の渦）
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.82); ctx.rotate(ready ? now / 500 : 0);
+  for (let k = 0; k < 3; k++) { ctx.rotate(Math.PI * 2 / 3); ctx.beginPath();
+    for (let j = 0; j <= 24; j++) { const t = j / 24, a = t * 2.4, r = R * (1.25 - 0.6 * t); ctx[j ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+    ctx.lineCap = 'round'; ctx.globalAlpha = ready ? 1 : 0.55;
+    ctx.strokeStyle = ready ? '#9a6a08' : '#6b6450'; ctx.lineWidth = Math.max(2, 0.075 * S); ctx.stroke();
+    ctx.strokeStyle = ready ? '#ffd65a' : '#8f8360'; ctx.lineWidth = Math.max(1.5, 0.05 * S); ctx.stroke();
+    ctx.strokeStyle = ready ? '#fff3c4' : '#b8b09a'; ctx.lineWidth = Math.max(1, 0.018 * S); ctx.stroke(); }
+  ctx.restore();
+  // 中心の闇
+  const cg = ctx.createRadialGradient(x, y, 0, x, y, R * 0.78);
+  cg.addColorStop(0, '#000000'); cg.addColorStop(0.7, ready ? '#1a1004' : '#141414'); cg.addColorStop(1, ready ? '#c8961a' : '#6b6450');
+  ctx.globalAlpha = 1; ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(x, y, R * 0.78, 0, 7); ctx.fill();
+  ctx.strokeStyle = ready ? '#ffe28a' : '#8f8360'; ctx.lineWidth = Math.max(1, (dragging ? 0.04 : 0.022) * S); ctx.stroke();
+  if (!ready) { const left = Math.ceil(B.hole.readyAt - g.t); ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.round(0.2 * S)}px sans-serif`; ctx.fillText(String(left), x, y + 0.01 * S); }
+  ctx.restore();
+}
+// ダイスがホールに吸い込まれる（0.6秒）：マスからホールへ、回りながら小さくなる
+V('fx', 'blessHoleSuck', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
+  const sp = RD.DICE.blessdice.view.holeSpot, [cx, cy] = g.cellXY(f.cell), t = 1 - a, e = t * t * (3 - 2 * t);
+  const hx = X(sp.x), hy = Y(sp.y), sx = X(cx), sy = Y(cy), ang = e * Math.PI * 3, rr = (1 - e) * 0.25 * S;
+  const x = sx + (hx - sx) * e + Math.cos(ang) * rr, y = sy + (hy - sy) * e + Math.sin(ang) * rr, sz = (0.36 * (1 - e) + 0.03) * S;
+  const col = (RD.DICE[f.type] && RD.DICE[f.type].color) || '#d9a52e';
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = Math.min(1, a * 3); ctx.fillStyle = col; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, 0.02 * S);
+  ctx.beginPath(); ctx.rect(-sz / 2, -sz / 2, sz, sz); ctx.fill(); ctx.stroke(); ctx.restore(); } });
+// 祝福ホールが開く（1.4秒）：ホールの位置から金の輪が広がる
+V('fx', 'blessHoleOpen', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
+  const sp = RD.DICE.blessdice.view.holeSpot, x = X(sp.x), y = Y(sp.y), t = 1 - a;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#ffd65a'; ctx.lineWidth = Math.max(2, 0.06 * S * a);
+  for (const k of [0, 0.25]) { const r = (0.2 + Math.max(0, t - k) * 1.2) * S; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); } ctx.restore(); } });
 V('fx', 'blessSlot', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
   const [cx, cy] = g.cellXY(f.cell), x = X(cx), y = Y(cy), t = 1 - a;
   ctx.save(); ctx.globalAlpha = Math.min(1, a * 2); ctx.strokeStyle = '#ffb020'; ctx.lineWidth = Math.max(2, 0.05 * S * a);
@@ -5571,7 +5691,7 @@ V('dice', 'kyokugen', { c2: '#fff0f8',
   glyph() {},
   pipColor: (g, d, C) => kMix(C, '#8a0030', 0.55),
   badge: (g, d) => { const R = g.vars.rd2 || { stack: 0, base: 0 }; return String(Math.floor(R.stack + (d && d.pips === 7 ? R.base : 0))); },
-  underDie({ ctx, S }, g, d, px, py) {
+  _underDieOff({ ctx, S }, g, d, px, py) { // 6.0.0ο〜：魔法陣はなし（太陽などと同じ回る輪＝orbit だけ）
     if (d.pips !== 7) return;
     const c = kyokuColor(g), a = performance.now() / 1500, R0 = 0.47 * S;
     ctx.save(); ctx.translate(px, py); ctx.fillStyle = c; ctx.globalAlpha = 0.16; ctx.beginPath(); ctx.arc(0, 0, R0, 0, 7); ctx.fill();
@@ -5610,7 +5730,31 @@ V('dice', 'yinyang', { c2: '#ffffff', rimSplit: ['#2f5fe0', '#d8443c'], dragon2:
     ctx.fillStyle = A; ctx.beginPath(); ctx.arc(x, y, R, -Math.PI / 2, Math.PI / 2); ctx.arc(x, y + R / 2, R / 2, Math.PI / 2, -Math.PI / 2, true); ctx.arc(x, y - R / 2, R / 2, Math.PI / 2, -Math.PI / 2); ctx.fill();
     ctx.restore(); },
   // 極の調和（縦横とも）：赤と青の円弧が回る
-  orbit(g, d, i) { if (i == null) return null; const ln = g.lineStatus(i, d.type); return ln.col && ln.row ? { cols: ['#e5372f', '#2f5fe0'], dir: 1, shape: 'comet', period: 2000 } : null; } });
+  orbit(g, d, i) { if (i == null) return null; const ln = g.lineStatus(i, d.type); return ln.col && ln.row ? { cols: ['#e5372f', '#2f5fe0'], dir: 1, shape: 'comet', period: 2000 } : null; },
+  // 極の調和になった瞬間（6.0.0κ〜）：そのマスを中心に、縦と横の列へ紫の帯と矢印が伸びる（0.3秒）→ 少し残って消える（0.35秒）
+  overlay({ ctx, X, Y, S, g, d, i }) {
+    let M = YY_HARM.get(g); if (!M) YY_HARM.set(g, M = new Map());
+    const ln = g.lineStatus(i, d.type), now = performance.now(), st = M.get(i);
+    if (!(ln.col && ln.row)) { if (st) M.delete(i); return; }
+    if (!st || st.id !== d.id) { M.set(i, { id: d.id, t0: now }); return; }
+    const dt = now - st.t0, GROW = 300, HOLD = 350; if (dt > GROW + HOLD) return;
+    const p = 1 - Math.pow(1 - Math.min(1, dt / GROW), 3), al = dt < GROW ? 1 : 1 - (dt - GROW) / HOLD;
+    const [r, c] = g.rc(i), P = k => { const [x, y] = g.cellXY(k); return [X(x), Y(y)]; };
+    const [x0, y0] = P(i), [xl] = P(r * 5), [xr] = P(r * 5 + 4), [, yt] = P(c), [, yb] = P(10 + c);
+    const cw = Math.abs(P(r * 5 + 1)[0] - P(r * 5)[0]) || 0.9 * S, ch = Math.abs(P(5 + c)[1] - P(c)[1]) || 0.9 * S;
+    const ends = [[xl - cw * 0.55, y0], [xr + cw * 0.55, y0], [x0, Math.min(yt, yb) - ch * 0.55], [x0, Math.max(yt, yb) + ch * 0.55]];
+    ctx.save(); ctx.globalAlpha = 0.75 * al; ctx.lineCap = 'round';
+    for (const [ex, ey] of ends) {
+      const tx = x0 + (ex - x0) * p, ty = y0 + (ey - y0) * p, L = Math.hypot(tx - x0, ty - y0); if (L < 1) continue;
+      const ux = (tx - x0) / L, uy = (ty - y0) / L, w = 0.2 * S;
+      const gr = ctx.createLinearGradient(x0, y0, tx, ty); gr.addColorStop(0, 'rgba(110,70,220,.15)'); gr.addColorStop(1, 'rgba(110,70,220,.6)');
+      ctx.strokeStyle = gr; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(tx - ux * w * 0.6, ty - uy * w * 0.6); ctx.stroke();
+      ctx.fillStyle = 'rgba(110,70,220,.75)'; // 矢印の先
+      for (const back of [0, 0.32 * S]) { const bx = tx - ux * back, by = ty - uy * back, hw = w * (back ? 0.7 : 0.95), hl = w * (back ? 0.7 : 0.95);
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - ux * hl - uy * hw, by - uy * hl + ux * hw); ctx.lineTo(bx - ux * hl * 0.45, by - uy * hl * 0.45); ctx.lineTo(bx - ux * hl + uy * hw, by - uy * hl - ux * hw); ctx.closePath(); ctx.fill(); }
+    }
+    ctx.restore(); } });
+const YY_HARM = new WeakMap(); // 極の調和の演出：盤面ごとに、極の調和になったマスと始まった時刻（6.0.0κ〜）
 V('dice', 'yinyang_650', RD.DICE.yinyang.view); // 陰陽（6.5.0）も同じ見た目（3.3.0〜）
 V('dice', 'time', { c2: '#e8eaee',   // 灰色の時計（3.3.0〜）
   glyph(p, x, y, r, c, c2) { const ctx = p.ctx; ctx.strokeStyle = c2; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.arc(x, y, r * 0.72, 0, 7); ctx.stroke();
@@ -5703,7 +5847,7 @@ V('fx', 'gearHit', { draw({ ctx, X, Y, S }, g, f, a) {
 // スコープの発動・強化歯車の追加攻撃：そのダイスに一瞬スコープ（0.05秒。ダイスの上に描く）（3.14.0〜）
 V('fx', 'scopeProc', { top: true, draw({ ctx, X, Y, S }, g, f, a) {
   const [cx, cy] = g.cellXY(f.cell), x = X(cx), y = Y(cy), R = 0.36 * S;
-  ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ff4f86'; ctx.lineWidth = Math.max(1.5, 0.035 * S);
+  ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = f.col || '#ff4f86'; ctx.lineWidth = Math.max(1.5, 0.035 * S); // f.col：追加攻撃の種類の色（6.0.0θ〜）。なければスコープのピンク
   ctx.beginPath(); ctx.arc(x, y, R * 0.8, 0, 7); ctx.stroke();
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.beginPath(); ctx.moveTo(x + dx * R * 0.45, y + dy * R * 0.45); ctx.lineTo(x + dx * R * 1.05, y + dy * R * 1.05); ctx.stroke(); }
   ctx.restore(); } });
@@ -6043,7 +6187,7 @@ function canOp(g, c, a, b) {
   if (g.over) return false;
   if (c === 0) return g.canSummon();
   if (c === 1) return typeof a === 'string' && g.cfg.deck.includes(a) && g.sp >= g.puCost(a);
-  if (c === 2) return cell(a) && cell(b) && !!g.canAct(a, b);
+  if (c === 2) return cell(a) && (cell(b) || b === 15) && !!g.canAct(a, b); // 15：祝福ホール（6.0.0ο〜）
   if (c === 3) return cell(a) && cell(b) && !!g.hoverRule(a, b);
   if (c === 4) return typeof a === 'string' && g.cfg.deck.includes(a) && g.canSpecial(a);
   return false;
@@ -7254,6 +7398,16 @@ function drawWait(g){
 const INSTA_KEYS=()=>Object.keys(BUFFS).filter(k=>BUFFS[k].insta);
 // 対象が消えた弾（3.10.0〜）：その場で弾けて消える（表示だけ。エンジンでは今までどおり外れ）
 const shotPopped=new WeakSet(), shotBursts=new Map(); // g → [{x, y, t, col}]（キャンバスの座標）
+// 弾の描画制限（6.0.0ξ〜。見た目だけ。ダメージ・計算は変えない）：
+//   1つのダイスが描く弾は、クラス13の月★（速度バフ上限95%）に隣接した太陽★7（活性0.4秒）の速さ＝0.4÷7×0.05秒に1発（毎秒350発）まで。
+//   それより速い分の弾は飛ばさずに描かない（本体の弾と追加の弾は別々に数える）
+const SHOT_DRAW_RATE=1/(0.4/7*0.05), SHOT_DRAW_CAP=SHOT_DRAW_RATE*0.1, shotHide=new WeakMap(), shotBucket=new WeakMap(); // 0.1秒分までためられる（フレームのばらつき用）
+function shotShown(g,sh){ let v=shotHide.get(sh); if(v!==undefined) return v;
+  const d=sh.d; if(!d||typeof d!=='object'){ shotHide.set(sh,true); return true; }
+  let B=shotBucket.get(d); if(!B){ B={}; shotBucket.set(d,B); } const key=sh.extra?'x':'m';
+  let b=B[key]; if(!b||b.g!==g||g.t<b.t){ b=B[key]={g,t:g.t,n:SHOT_DRAW_CAP}; }
+  b.n=Math.min(SHOT_DRAW_CAP,b.n+(g.t-b.t)*SHOT_DRAW_RATE); b.t=g.t;
+  v=b.n>=1; if(v) b.n-=1; shotHide.set(sh,v); return v; }
 const BURST_MS=240;
 function drawBursts(g){
   const L=shotBursts.get(g); if(!L||!L.length) return; const now=performance.now();
@@ -7266,7 +7420,7 @@ function drawBursts(g){
 function drawShots(g){
   const v=g.cfg.bulletSpeed||12;
   for(const sh of g.shots){
-    if(shotPopped.has(sh)) continue;
+    if(shotPopped.has(sh)||!shotShown(g,sh)) continue;
     const [tx,ty]=g.posXY(sh.tgt.pos), dist=Math.max(0.01,Math.hypot(tx-sh.x,ty-sh.y));
     const k=Math.max(0,Math.min(1,1-(sh.at-g.t)*v/dist));
     const sp=shotPip.get(sh), cur=sp&&g.board[sp.cell];
@@ -7447,7 +7601,7 @@ function drawDie(g,d,px,py,i){
   { const pc=V.pipColor?V.pipColor(g,d,C):mixHex(C,'#0d0f14',0.35); // 出目の点（弾を出した点は一瞬ふくらむ）。ふくらんでいない間は作り置きを貼る（5.2.0〜）
     if(!(TILES && i>=0 && k>=1 && !(fk>0) && !ctx.shadowBlur && ctx.globalAlpha===1 && pipsBlit(TILES,i,d.pips,pc,px,py+0.06*S,0.46*S))) drawPips(px,py+0.06*S,0.46*S,d.pips,fk>0?pf.k:-1,fk,pc); }
   const bar=V.bar?V.bar(g,d):null; // 下部のゲージ（成長・炎・台風・過熱）
-  if(bar!=null){ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x+rw+2,y+fh-rw-6,w-2*rw-4,4);ctx.fillStyle=C;ctx.fillRect(x+rw+2,y+fh-rw-6,(w-2*rw-4)*Math.min(1,bar),4);}
+  if(bar!=null){ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x+rw+2,y+fh-rw-6,w-2*rw-4,4);ctx.fillStyle=V.barColor?V.barColor(g,d,C):C; /* V.barColor：ゲージの色（6.0.0λ〜） */ctx.fillRect(x+rw+2,y+fh-rw-6,(w-2*rw-4)*Math.min(1,bar),4);}
   const foot=V.footer?V.footer(g,d):null; // 下部の文字（テレポートの格納数・過熱の段階）
   if(foot!=null){ctx.fillStyle=mixHex(C,'#0d0f14',0.55);ctx.font=`bold ${0.15*S}px sans-serif`;ctx.fillText(foot,px,y+fh-rw-3);}
   // ダイスに付く状態（封印・沈黙・ハッキング・懸賞金の印など）
@@ -7555,14 +7709,15 @@ function pipsBlit(M,i,n,col,cx,cy,sz){
   return true;
 }
 function drawPips(cx,cy,sz,n,fi,fk,col){
-  col=col||'#fff'; const edge=col==='#fff'?'#0d0f14':'#ffffff';
+  col=col||'#fff'; let edge=col==='#fff'?'#0d0f14':'#ffffff', lw=1.5;
+  if(col.indexOf('/')>0){ const q=col.split('/'); col=q[0]; edge=q[1]||edge; lw=+q[2]||lw; } // 「中/縁/線の太さ」（6.0.0μ〜。祝福）
   const o=sz*0.33, r=sz*0.085*(n>=2&&n<=6?1.4:1.2), L=PIP_L[n]||[]; // 点の大きさ 1.2倍（3.10.0〜）。出目2〜6は 1.4倍（5.5.2〜）
-  if(n===7){const z=1+0.45*(fi===0?fk:0); star(cx,cy,sz*0.36*z,sz*0.156*z,col,edge);return;} // 出目7の星（1.3.0で小さく。3.10.0〜 1.2倍）
+  if(n===7){const z=1+0.45*(fi===0?fk:0); star(cx,cy,sz*0.36*z,sz*0.156*z,col,edge,lw);return;} // 出目7の星（1.3.0で小さく。3.10.0〜 1.2倍）
   L.forEach(([dx,dy],k)=>{const z=1+0.6*(k===fi?fk:0); ctx.beginPath();ctx.arc(cx+dx*o,cy+dy*o,(n===1?r*1.5:r)*z,0,7);
-    ctx.fillStyle=col;ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=edge;ctx.stroke();});
+    ctx.fillStyle=col;ctx.fill();ctx.lineWidth=lw;ctx.strokeStyle=edge;ctx.stroke();});
 }
-function star(cx,cy,R,r,col,edge){ctx.beginPath();for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,rr=k%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}
-  ctx.closePath();ctx.fillStyle=col||'#fff';ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=edge||'#0d0f14';ctx.stroke();}
+function star(cx,cy,R,r,col,edge,lw){ctx.beginPath();for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,rr=k%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}
+  ctx.closePath();ctx.fillStyle=col||'#fff';ctx.fill();ctx.lineWidth=lw||1.5;ctx.strokeStyle=edge||'#0d0f14';ctx.stroke();}
 function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 
 // ---------- HUD・ログ ----------
@@ -7659,6 +7814,7 @@ function ptr(ev){const r=cv.getBoundingClientRect();return [ev.clientX-r.left,ev
 // 重ねる操作はドラッグだけ：つかんだダイスを別のダイスの上で離したときだけ実行する（1.23.0〜。タップで選んでタップする操作はなし）
 // ダイスの見た目が持つ「タップできる場所」（view.spot＝{x, y, r}・盤面の単位）と、その一覧（view.panel(g) がHTMLを返す）。祝福の像（5.3.0〜）
 let panelType=null;
+function holeAt(px,py){ const v=views.main; for(const t of game.cfg.deck){ const DV=DICE[t].view, sp=DV&&DV.holeSpot; if(sp && Math.hypot(px-(sp.x-UX0)*v.S, py-(UY1-sp.y)*v.S)<=sp.r*v.S) return true; } return false; } // 祝福ホール（6.0.0ο〜）
 function spotAt(px,py){ const v=views.main; for(const t of game.cfg.deck){ const DV=DICE[t].view, sp=DV&&DV.panel&&DV.spot; if(sp && Math.hypot(px-(sp.x-UX0)*v.S, py-(UY1-sp.y)*v.S)<=sp.r*v.S) return t; } return null; }
 function refreshPanel(){ const el=$('dPanel'); if(panelType && !(game && game.cfg.deck.includes(panelType))) panelType=null;
   if(!panelType){ if(el.style.display!=='none') el.style.display='none'; return; }
@@ -7668,7 +7824,7 @@ cv.addEventListener('pointerdown',ev=>{const [px,py]=ptr(ev);const i=cellAt(px,p
   sel=-1; downCell=-1;
   if(i<0){ const t=spotAt(px,py); if(t){ panelType=t; refreshPanel(); } return; }
   const d=game.board[i];
-  if(d&&!d.sealed){ downCell=i; sel=i; drag={cell:i,die:d,px,py,holding:true}; try{cv.setPointerCapture(ev.pointerId);}catch(e){} } // sel はドラッグ中だけ（重ねられる相手を緑枠で示す）
+  if(d&&!d.sealed){ downCell=i; sel=i; drag={cell:i,die:d,px,py,holding:true}; window.__rdDragging=true; window.__rdDragGame=game; try{cv.setPointerCapture(ev.pointerId);}catch(e){} } // sel はドラッグ中だけ（重ねられる相手を緑枠で示す）
 });
 cv.addEventListener('pointermove',ev=>{ if(drag&&drag.holding){const [px,py]=ptr(ev);drag.px=px;drag.py=py;
   // かざす操作（炎の再点火）：別のマスに入った時点で1回。離れてまた入ればもう1回
@@ -7678,6 +7834,8 @@ cv.addEventListener('pointermove',ev=>{ if(drag&&drag.holding){const [px,py]=ptr
 function release(ev,cancel){
   const [px,py]=ptr(ev);const i=cellAt(px,py);
   if(drag&&drag.holding){drag.holding=false;drag.relT=performance.now();drag.rx=drag.px;drag.ry=drag.py;}
+  window.__rdDragging=false;
+  if(!cancel&&downCell>=0&&i<0&&game.board[downCell]&&holeAt(px,py)){ const H=15; const res=onl.sess ? (()=>{ const r=game.canAct(downCell,H); return r&&onl.sess.input('act',downCell,H) ? r : null; })() : game.act(downCell,H); $('info').textContent=res?'→ '+RD.actionLabel(res):'祝福ホールはまだ使えません'; }
   if(!cancel&&downCell>=0&&i>=0&&i!==downCell&&game.board[downCell]&&game.board[i]){ const res=onl.sess ? (()=>{ const r=game.canAct(downCell,i); return r&&onl.sess.input('act',downCell,i) ? r : null; })() : game.act(downCell,i); $('info').textContent=res?'→ '+RD.actionLabel(res):'その組み合わせは重ねられません'; }
   sel=-1; downCell=-1;
 }
